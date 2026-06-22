@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -44,6 +44,17 @@ function startPythonSidecar() {
     console.log(`FastAPI sidecar exited with code ${code}`);
   });
 }
+
+ipcMain.handle('select-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Select media folder to scan'
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
 
 app.whenReady().then(() => {
   startPythonSidecar();

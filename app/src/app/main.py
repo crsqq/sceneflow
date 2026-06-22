@@ -34,6 +34,13 @@ class MarkerRequest(BaseModel):
     end_timestamp: float | None = None
     note: str | None = None
 
+class CullRequest(BaseModel):
+    is_kept: bool | None = None
+    is_rejected: bool | None = None
+
+class ReorderRequest(BaseModel):
+    item_ids: list[str]
+
 @app.on_event("startup")
 async def startup_event():
     db_manager.init_db()
@@ -55,10 +62,25 @@ async def get_proxy(clip_id: str):
             raise HTTPException(status_code=404, detail="Proxy not found")
         return FileResponse(clip.proxy_path)
 
+@app.get("/thumbs/{clip_id}")
+async def get_thumbnail(clip_id: str):
+    with db_manager.get_session() as session:
+        from app.core.database import MediaClip
+        clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
+        if not clip or not clip.thumbnail_path or not os.path.exists(clip.thumbnail_path):
+            raise HTTPException(status_code=404, detail="Thumbnail not found")
+        return FileResponse(clip.thumbnail_path)
+
 @app.post("/clips/{clip_id}/status")
 async def update_clip_status(clip_id: str, is_kept: bool):
-    db_manager.update_clip_status(clip_id, is_kept)
+    db_manager.update_clip_status(clip_id, is_kept=is_kept)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id, "is_kept": is_kept})
+    return {"status": "updated"}
+
+@app.post("/clips/{clip_id}/cull")
+async def cull_clip(clip_id: str, request: CullRequest):
+    db_manager.update_clip_status(clip_id, is_kept=request.is_kept, is_rejected=request.is_rejected)
+    await telemetry.broadcast("clip_updated", {"clip_id": clip_id, "is_kept": request.is_kept, "is_rejected": request.is_rejected})
     return {"status": "updated"}
 
 @app.post("/clips/{clip_id}/tags")
@@ -120,6 +142,22 @@ async def add_sequence_item(sequence_id: str, request: SequenceItemRequest):
     item = db_manager.add_sequence_item(sequence_id, request.clip_id, request.position, request.notes)
     return item
 
+@app.get("/sequences/{sequence_id}/items")
+async def get_sequence_items(sequence_id: str):
+    return db_manager.get_sequence_items_with_clips(sequence_id)
+
+@app.delete("/sequences/{sequence_id}/items/{item_id}")
+async def remove_sequence_item(sequence_id: str, item_id: str):
+    db_manager.remove_sequence_item(item_id)
+    await telemetry.broadcast("sequence_updated", {"sequence_id": sequence_id})
+    return {"status": "item_removed"}
+
+@app.post("/sequences/{sequence_id}/reorder")
+async def reorder_sequence_items(sequence_id: str, request: ReorderRequest):
+    db_manager.reorder_sequence_items(sequence_id, request.item_ids)
+    await telemetry.broadcast("sequence_updated", {"sequence_id": sequence_id})
+    return {"status": "reordered"}
+
 @app.get("/sequences")
 async def get_sequences():
     with db_manager.get_session() as session:
@@ -135,9 +173,18 @@ async def export_sequence(sequence_id: str):
 
 @app.post("/scan")
 async def scan_directory(request: ScanRequest):
+    await telemetry.broadcast("scan_started", {"path": request.path})
     clips_data = await media_processor.scan_directory(request.path)
     new_clips_count = 0
-    for data in clips_data:
+    skipped_clips_count = 0
+    total = len(clips_data)
+
+    for idx, data in enumerate(clips_data):
+        await telemetry.broadcast(
+            "scan_progress",
+            {"processed": idx + 1, "total": total, "current_file": data['file_name']},
+            progress=round((idx + 1) / max(total, 1) * 100, 1)
+        )
         # Check if clip already exists to avoid duplicates
         existing = db_manager.get_session().query(MediaClip).filter(MediaClip.file_path == data['file_path']).first()
         if not existing:
@@ -147,12 +194,18 @@ async def scan_directory(request: ScanRequest):
                 resolution=data['resolution'],
                 frame_rate=data['frame_rate'],
                 orientation=data['orientation'],
-                proxy_path=data['proxy_path']
+                proxy_path=data['proxy_path'],
+                thumbnail_path=data['thumbnail_path']
             )
             db_manager.add_clip(new_clip)
             new_clips_count += 1
             # Trigger proxy generation in background
             asyncio.create_task(media_processor.generate_proxy(new_clip.id, new_clip.file_path, db_manager, telemetry))
-    
-    await telemetry.broadcast("scan_complete", {"new_clips": new_clips_count, "total_found": len(clips_data)})
-    return {"new_clips": new_clips_count, "total_found": len(clips_data)}
+        else:
+            skipped_clips_count += 1
+
+    await telemetry.broadcast(
+        "scan_complete",
+        {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}
+    )
+    return {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}

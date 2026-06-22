@@ -16,13 +16,22 @@
 - [x] Single-point "Add Marker" button
 - [x] Improved marker note modal dialog
 - [x] Preview Markdown button and modal for sequences
+- [x] Three-state culling (Keep / Reject / Unrated) with keyboard shortcuts
+- [x] Native Electron folder picker
+- [x] Scan progress telemetry with progress bar
+- [x] Thumbnail generation and display in clip list
+- [x] Preset creative tag palette with 1–9 keyboard shortcuts
+- [x] Cull and tag filters
+- [x] Drag-and-drop Blueprint sequence builder with reorder/remove
+- [x] Dark cinematic UI, toast notifications, focus mode, shortcut help
 
 ## In Progress
-- [ ] End-to-end testing of the updated marker and storyboard workflow.
+- [ ] End-to-end testing of the creative workflow (Scan → Cull → Tag → Blueprint).
 
 ## Upcoming
-- [ ] Refinement of UI/UX across all modules.
-- [ ] Add automated tests for marker ranges and exporter output.
+- [ ] Add automated tests for culling, tagging, and sequence reordering.
+- [ ] Persist user preferences (tag palette, auto-advance, focus mode) in localStorage.
+- [ ] Evaluate and optimize thumbnail extraction on large directories.
 
 ## Known Issues
-- Existing SQLite databases will need schema migration (or deletion) because `clip_markers` gained an `end_timestamp` column.
+- Existing SQLite databases will need schema migration (or deletion) because `clip_markers` gained an `end_timestamp` column and `media_clips` gained `is_rejected` / `thumbnail_path` columns.

@@ -52,7 +52,8 @@ class MediaProcessor:
                 "resolution": f"{width}x{height}",
                 "frame_rate": self._parse_fps(video_stream.get('avg_frame_rate', '0/0')),
                 "orientation": "vertical" if height > width else "horizontal",
-                "proxy_path": "" # To be filled later
+                "proxy_path": "", # To be filled later
+                "thumbnail_path": "" # To be filled later
             }
         except Exception as e:
             logger.error(f"Error extracting metadata for {file_path}: {e}")
@@ -66,43 +67,71 @@ class MediaProcessor:
             return 0.0
 
     async def generate_proxy(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
-        """Background task using FFmpeg to create low-res proxies."""
+        """Background task using FFmpeg to create low-res proxies and a poster thumbnail."""
         import asyncio
         # 1. Determine proxy directory: <source_dir>/.sceneflow/proxies/
         source_dir = os.path.dirname(source_path)
         sceneflow_dir = os.path.join(source_dir, ".sceneflow")
         proxies_dir = os.path.join(sceneflow_dir, "proxies")
+        thumbs_dir = os.path.join(sceneflow_dir, "thumbs")
         os.makedirs(proxies_dir, exist_ok=True)
+        os.makedirs(thumbs_dir, exist_ok=True)
 
         file_name = os.path.basename(source_path)
         base_name, _ = os.path.splitext(file_name)
         proxy_filename = f"{base_name}_proxy.mp4"
         proxy_path = os.path.join(proxies_dir, proxy_filename)
+        thumb_filename = f"{base_name}_thumb.jpg"
+        thumbnail_path = os.path.join(thumbs_dir, thumb_filename)
 
         try:
             logger.info(f"Generating proxy for {source_path} -> {proxy_path}")
             await telemetry.broadcast("proxy_started", {"clip_id": clip_id, "file_name": file_name})
 
             # FFmpeg command for low-res proxy (e.g., 720p, h264)
-            cmd = [
+            proxy_cmd = [
                 'ffmpeg', '-y', '-i', source_path,
-                '-vf', 'scale=-2:720', 
-                '-c:v', 'libx264', '-preset', 'veryfast', 
+                '-vf', 'scale=-2:720',
+                '-c:v', 'libx264', '-preset', 'veryfast',
                 '-crf', '28', '-c:a', 'aac', '-b:a', '128k',
                 proxy_path
             ]
-            
+
+            # Thumbnail: single frame at 1s or 0.5s if shorter, scaled to 320px width
+            thumb_cmd = [
+                'ffmpeg', '-y', '-i', source_path,
+                '-ss', '00:00:01.000',
+                '-vframes', '1',
+                '-vf', 'scale=320:-2',
+                '-q:v', '2',
+                thumbnail_path
+            ]
+
             # Use asyncio.create_subprocess_exec for non-blocking execution
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
+            proxy_process = await asyncio.create_subprocess_exec(
+                *proxy_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
+            proxy_stdout, proxy_stderr = await proxy_process.communicate()
 
-            stdout, stderr = await process.communicate()
+            if proxy_process.returncode != 0:
+                raise Exception(f"FFmpeg proxy error: {proxy_stderr.decode()}")
 
-            if process.returncode != 0:
-                raise Exception(f"FFmpeg error: {stderr.decode()}")
+            # Generate thumbnail (best-effort; don't fail proxy if thumbnail fails)
+            try:
+                thumb_process = await asyncio.create_subprocess_exec(
+                    *thumb_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                thumb_stdout, thumb_stderr = await thumb_process.communicate()
+                if thumb_process.returncode != 0:
+                    logger.warning(f"Thumbnail generation failed for {source_path}: {thumb_stderr.decode()}")
+                    thumbnail_path = ""
+            except Exception as thumb_err:
+                logger.warning(f"Thumbnail generation exception for {source_path}: {thumb_err}")
+                thumbnail_path = ""
 
             # 2. Update database
             from app.core.database import MediaClip
@@ -110,9 +139,11 @@ class MediaProcessor:
                 clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
                 if clip:
                     clip.proxy_path = proxy_path
+                    if thumbnail_path:
+                        clip.thumbnail_path = thumbnail_path
                     session.commit()
 
-            await telemetry.broadcast("proxy_completed", {"clip_id": clip_id, "proxy_path": proxy_path})
+            await telemetry.broadcast("proxy_completed", {"clip_id": clip_id, "proxy_path": proxy_path, "thumbnail_path": thumbnail_path})
             logger.info(f"Proxy generated successfully: {proxy_path}")
 
         except Exception as e:

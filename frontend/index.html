@@ -8,59 +8,64 @@
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body x-data="app">
-    <div class="container">
-        <header>
-            <h1>SceneFlow</h1>
-        </header>
-        <main>
-            <div class="status-bar">
-                Status: <span x-text="status"></span>
+<body x-data="app" @keydown.window="handleGlobalKey($event)">
+    <div class="app-shell" :class="{ 'focus-mode': focusMode }">
+        <header class="app-header">
+            <div class="brand">
+                <h1>SceneFlow</h1>
+                <span class="status-pill" :class="statusType" x-text="status"></span>
             </div>
+            <div class="header-actions">
+                <button @click="openShortcutHelp()" class="btn-icon" title="Keyboard shortcuts (?)">?</button>
+            </div>
+        </header>
 
-            <div class="layout">
-                <!-- Video Preview Section -->
-                <div class="preview-section" x-show="selectedClip">
-                    <div class="video-container">
-                        <video 
-                            x-ref="player" 
-                            :src="selectedClip ? 'http://localhost:8000/proxy/' + selectedClip.id : ''" 
-                            controls 
-                            autoplay
-                        ></video>
-                        <!-- Visual markers overlay -->
-                        <div class="markers-overlay" x-show="markers.length > 0">
-                            <template x-for="marker in markers" :key="marker.id">
-                                <div 
-                                    class="marker-range"
-                                    :style="getMarkerRangeStyle(marker)"
-                                    @click="seekTo(marker.timestamp)"
-                                    :title="'Section: ' + formatTime(marker.timestamp) + (marker.end_timestamp ? ' – ' + formatTime(marker.end_timestamp) : '') + (marker.note ? ' | ' + marker.note : '')"
-                                ></div>
-                            </template>
-                        </div>
+        <main class="app-main">
+            <!-- Left: Preview -->
+            <section class="preview-section" x-show="selectedClip" x-cloak>
+                <div class="video-container" @dblclick="toggleFocusMode()">
+                    <video
+                        x-ref="player"
+                        :src="selectedClip ? 'http://localhost:8000/proxy/' + selectedClip.id : ''"
+                        controls
+                        autoplay
+                        @keydown="handlePlayerKey($event)"
+                    ></video>
+                    <div class="markers-overlay" x-show="markers.length > 0">
+                        <template x-for="marker in markers" :key="marker.id">
+                            <div
+                                class="marker-range"
+                                :style="getMarkerRangeStyle(marker)"
+                                @click="seekTo(marker.timestamp)"
+                                :title="'Section: ' + formatTime(marker.timestamp) + (marker.end_timestamp ? ' – ' + formatTime(marker.end_timestamp) : '') + (marker.note ? ' | ' + marker.note : '')"
+                            ></div>
+                        </template>
                     </div>
-                    <div class="player-controls" x-show="selectedClip">
+                </div>
+
+                <div class="player-toolbar">
+                    <div class="player-actions">
                         <button @click="setMarkerStart()" :class="pendingMarkerStart !== null ? 'btn-active' : ''">
                             <span x-text="pendingMarkerStart !== null ? 'Start: ' + formatTime(pendingMarkerStart) : 'Set Start'"></span>
                         </button>
-                        <button @click="setMarkerEnd()" :disabled="pendingMarkerStart === null">
-                            Set End
-                        </button>
-                        <button @click="cancelMarkerRange()" class="btn-secondary" x-show="pendingMarkerStart !== null">
-                            Cancel
-                        </button>
-                        <button @click="addSingleMarker()" class="btn-secondary">
-                            Add Marker
-                        </button>
+                        <button @click="setMarkerEnd()" :disabled="pendingMarkerStart === null">Set End</button>
+                        <button @click="cancelMarkerRange()" class="btn-secondary" x-show="pendingMarkerStart !== null">Cancel</button>
+                        <button @click="addSingleMarker()" class="btn-secondary">Add Marker</button>
                     </div>
-                    <div class="markers-panel" x-show="selectedClip">
-                        <h4 style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Markers</span>
-                            <span class="badge badge-info" x-text="markers.length + ' total'"></span>
-                        </h4>
-                        <ul class="marker-list" x-show="markers.length > 0">
-                            <template x-for="marker in markers" :key="marker.id">
+                    <div class="cull-actions">
+                        <button @click="cullSelected('keep')" :class="selectedClip && selectedClip.is_kept ? 'btn-keep active' : 'btn-keep'" title="Keep (K)">✓ Keep</button>
+                        <button @click="cullSelected('reject')" :class="selectedClip && selectedClip.is_rejected ? 'btn-reject active' : 'btn-reject'" title="Reject (X)">✕ Reject</button>
+                        <button @click="cullSelected('clear')" class="btn-secondary" title="Clear rating (U)">Unrated</button>
+                    </div>
+                </div>
+
+                <div class="markers-panel" x-show="selectedClip">
+                    <h4>
+                        <span>Markers</span>
+                        <span class="badge badge-info" x-text="markers.length + ' total'"></span>
+                    </h4>
+                    <ul class="marker-list" x-show="markers.length > 0">
+                        <template x-for="marker in markers" :key="marker.id">
                             <li>
                                 <span @click="seekTo(marker.timestamp)">
                                     <span x-text="formatTime(marker.timestamp)"></span>
@@ -71,84 +76,215 @@
                                 <span class="marker-note" x-text="marker.note"></span>
                                 <button @click="removeMarker(marker.id)" class="btn-delete">&times;</button>
                             </li>
-                            </template>
-                        </ul>
-                        <p x-show="markers.length === 0" style="font-size: 0.8em; color: #999; text-align: center;">No markers yet.</p>
+                        </template>
+                    </ul>
+                    <p x-show="markers.length === 0" class="empty-hint">No markers yet.</p>
+                </div>
+            </section>
+
+            <!-- Right: Library & Blueprint -->
+            <aside class="sidebar-section">
+                <!-- Scan -->
+                <div class="panel">
+                    <div class="scan-bar">
+                        <input type="text" x-model="scanPath" placeholder="Enter media directory path…" @keyup.enter="scanDirectory()">
+                        <button @click="chooseFolder()" class="btn-secondary" title="Choose folder">📁</button>
+                        <button @click="scanDirectory()" :disabled="scanning">Scan</button>
+                    </div>
+                    <div class="scan-progress" x-show="scanning">
+                        <div class="progress-track">
+                            <div class="progress-fill" :style="'width: ' + scanProgress + '%'"></div>
+                        </div>
+                        <span class="progress-text" x-text="scanStatusText"></span>
                     </div>
                 </div>
 
-                <!-- Sidebar/List Section -->
-                <div class="sidebar-section">
-                    <div class="controls">
-                <input type="text" x-model="scanPath" placeholder="Enter media directory path...">
-                <button @click="scanDirectory()">Scan Directory</button>
-            </div>
-            <div class="content">
-                <h3>Discovered Clips</h3>
-<ul class="clip-list">
-    <template x-for="clip in clips" :key="clip.id">
-        <li @click="selectClip(clip)" :class="{ 'is-kept': clip.is_kept, 'is-processing': proxyStatuses[clip.id] === 'generating', 'is-selected': selectedClip && selectedClip.id === clip.id }">
-            <div class="clip-main">
-                                <div class="clip-info">
-                                    <span class="file-name" x-text="clip.file_name"></span> 
-                                    <span class="resolution" x-text="'(' + clip.resolution + ')'"></span>
+                <!-- Filters -->
+                <div class="panel">
+                    <div class="filter-bar">
+                        <button
+                            @click="cullFilter = 'all'"
+                            :class="cullFilter === 'all' ? 'active' : ''"
+                        >All</button>
+                        <button
+                            @click="cullFilter = 'kept'"
+                            :class="cullFilter === 'kept' ? 'active' : ''"
+                        >Kept</button>
+                        <button
+                            @click="cullFilter = 'rejected'"
+                            :class="cullFilter === 'rejected' ? 'active' : ''"
+                        >Rejected</button>
+                        <button
+                            @click="cullFilter = 'unreviewed'"
+                            :class="cullFilter === 'unreviewed' ? 'active' : ''"
+                        >Unreviewed</button>
+                    </div>
+                    <div class="tag-filter" x-show="allTags.length > 0">
+                        <span class="filter-label">Tag:</span>
+                        <select x-model="tagFilter">
+                            <option value="">Any</option>
+                            <template x-for="tag in allTags" :key="tag">
+                                <option :value="tag" x-text="tag"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="clip-count" x-text="filteredClips.length + ' clips shown'"></div>
+                </div>
+
+                <!-- Tag Palette -->
+                <div class="panel">
+                    <h3>Tag Palette <span class="hint">press 1–9</span></h3>
+                    <div class="tag-palette">
+                        <template x-for="(tag, index) in tagPalette" :key="tag">
+                            <button
+                                class="tag-chip"
+                                :class="{ 'creative': true, 'on-selected': selectedClip && hasTag(selectedClip, tag) }"
+                                @click="togglePresetTag(tag)"
+                                :title="'Tag selected clip (' + (index + 1) + ')'">
+                                <span class="tag-shortcut" x-text="index + 1"></span>
+                                <span x-text="tag"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Clip Library -->
+                <div class="panel clip-library">
+                    <h3>Library</h3>
+                    <ul class="clip-list">
+                        <template x-for="clip in filteredClips" :key="clip.id">
+                            <li
+                                @click="selectClip(clip)"
+                                draggable="true"
+                                @dragstart="dragClip($event, clip)"
+                                :class="{
+                                    'is-kept': clip.is_kept,
+                                    'is-rejected': clip.is_rejected,
+                                    'is-selected': selectedClip && selectedClip.id === clip.id,
+                                    'is-processing': proxyStatuses[clip.id] === 'generating'
+                                }"
+                            >
+                                <div class="clip-thumb" :class="clip.orientation || 'horizontal'">
+                                    <img
+                                        x-show="clip.thumbnail_path"
+                                        :src="'http://localhost:8000/thumbs/' + clip.id"
+                                        loading="lazy"
+                                        alt=""
+                                    >
+                                    <div class="thumb-placeholder" x-show="!clip.thumbnail_path">
+                                        <span x-text="clip.file_name.slice(-3).toUpperCase()"></span>
+                                    </div>
                                 </div>
-                                <div class="clip-tags" x-show="clip.tags && clip.tags.length > 0">
-                                    <template x-for="tag in clip.tags" :key="tag.id">
-                                        <span class="tag-pill" x-text="tag.value"></span>
+                                <div class="clip-main">
+                                    <div class="clip-info">
+                                        <span class="file-name" x-text="clip.file_name"></span>
+                                        <span class="resolution" x-text="clip.resolution"></span>
+                                    </div>
+                                    <div class="clip-tags" x-show="clip.tags && clip.tags.length > 0">
+                                        <template x-for="tag in clip.tags" :key="tag.id">
+                                            <span
+                                                class="tag-pill"
+                                                :class="tag.tag_type"
+                                                @click.stop="filterByTag(tag.value)"
+                                                x-text="tag.value"
+                                            ></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="clip-actions">
+                                    <button
+                                        @click.stop="cullClip(clip.id, 'keep')"
+                                        :class="clip.is_kept ? 'btn-keep active' : 'btn-keep'"
+                                        title="Keep"
+                                    >✓</button>
+                                    <button
+                                        @click.stop="cullClip(clip.id, 'reject')"
+                                        :class="clip.is_rejected ? 'btn-reject active' : 'btn-reject'"
+                                        title="Reject"
+                                    >✕</button>
+                                </div>
+                                <div class="clip-status">
+                                    <template x-if="proxyStatuses[clip.id] === 'generating'">
+                                        <span class="badge badge-info">Proxy…</span>
+                                    </template>
+                                    <template x-if="proxyStatuses[clip.id] === 'completed'">
+                                        <span class="badge badge-success">Ready</span>
+                                    </template>
+                                    <template x-if="proxyStatuses[clip.id] === 'failed'">
+                                        <span class="badge badge-error">Proxy failed</span>
                                     </template>
                                 </div>
-                            </div>
-
-                            <div class="clip-actions">
-                                <button @click.stop="toggleKeep(clip.id, clip.is_kept)" 
-                                        :class="clip.is_kept ? 'btn-keep active' : 'btn-keep'">
-                                    <span x-text="clip.is_kept ? '✓ Kept' : 'Keep'"></span>
-                                </button>
-
-                                <div class="tag-input-group" x-show="showTagInput === clip.id" @click.away="showTagInput = null">
-                                    <input type="text" x-model="newTagName" @keyup.enter="addTag(clip.id, 'creative', newTagName); showTagInput = null" placeholder="Add tag...">
-                                </div>
-                                <button @click="showTagInput = clip.id" class="btn-icon">+</button>
-                            </div>
-
-                            <div class="clip-status">
-                                <template x-if="proxyStatuses[clip.id] === 'generating'">
-                                    <span class="badge badge-info">Generating proxy...</span>
-                                </template>
-                                <template x-if="proxyStatuses[clip.id] === 'completed'">
-                                    <span class="badge badge-success">Proxy ready</span>
-                                </template>
-                                <template x-if="proxyStatuses[clip.id] === 'failed'">
-                                    <span class="badge badge-error">Proxy failed</span>
-                                </template>
-                            </div>
-                        </li>
-                    </template>
-                </ul>
-                <p x-show="clips.length === 0">No clips discovered yet.</p>
-            </div>
-
-            <div class="content" style="margin-top: 20px;">
-                <h3>Sequences</h3>
-                <div class="controls">
-                    <button @click="createSequenceFromKept()">Create Sequence from Kept Clips</button>
+                            </li>
+                        </template>
+                    </ul>
+                    <p x-show="filteredClips.length === 0" class="empty-hint">No clips match the current filter.</p>
                 </div>
-                <ul class="sequence-list">
-                    <template x-for="seq in sequences" :key="seq.id">
-                        <li>
-                            <span x-text="seq.name"></span>
-                            <div class="sequence-actions">
-                                <button @click="previewStoryboard(seq.id)" class="btn-secondary">Preview Markdown</button>
-                                <button @click="exportStoryboard(seq.id)" class="btn-secondary">Export Markdown</button>
-                            </div>
-                        </li>
-                    </template>
-                </ul>
-                <p x-show="sequences.length === 0">No sequences created yet.</p>
-            </div>
-            </div>
+
+                <!-- Blueprint / Sequence -->
+                <div class="panel blueprint-panel">
+                    <div class="blueprint-header">
+                        <h3>Blueprint</h3>
+                        <div class="blueprint-actions">
+                            <select x-model="activeSequenceId" @change="loadActiveSequence()">
+                                <option value="">— select sequence —</option>
+                                <template x-for="seq in sequences" :key="seq.id">
+                                    <option :value="seq.id" x-text="seq.name"></option>
+                                </template>
+                            </select>
+                            <button @click="createSequence()" class="btn-secondary" title="New sequence">+ New</button>
+                        </div>
+                    </div>
+
+                    <div
+                        class="blueprint-dropzone"
+                        @dragover.prevent
+                        @drop="dropOnBlueprint($event)"
+                        x-show="activeSequenceId"
+                    >
+                        <template x-if="activeSequenceItems.length === 0">
+                            <p class="empty-hint">Drag clips here to build your sequence.</p>
+                        </template>
+                        <ul class="blueprint-list" x-sort="reorderBlueprint">
+                            <template x-for="item in activeSequenceItems" :key="item.id">
+                                <li
+                                    draggable="true"
+                                    @dragstart="dragBlueprintItem($event, item)"
+                                    @dragover.prevent="dragOverBlueprintItem($event, item)"
+                                    @drop="dropBlueprintItem($event, item)"
+                                >
+                                    <div class="bp-thumb">
+                                        <img x-show="item.clip && item.clip.thumbnail_path" :src="item.clip ? 'http://localhost:8000/thumbs/' + item.clip.id : ''" alt="">
+                                        <div class="thumb-placeholder" x-show="!item.clip || !item.clip.thumbnail_path">🎬</div>
+                                    </div>
+                                    <div class="bp-info">
+                                        <span class="bp-position" x-text="item.position + 1"></span>
+                                        <span class="bp-name" x-text="item.clip ? item.clip.file_name : '[Missing]'"></span>
+                                        <span class="bp-tags" x-show="item.clip && item.clip.tags.length > 0">
+                                            <template x-for="tag in item.clip.tags" :key="tag.id">
+                                                <span class="tag-pill creative" x-text="tag.value"></span>
+                                            </template>
+                                        </span>
+                                    </div>
+                                    <button @click="removeBlueprintItem(item.id)" class="btn-delete" title="Remove">&times;</button>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+
+                    <div class="blueprint-export" x-show="activeSequenceId">
+                        <button @click="previewStoryboard(activeSequenceId)" class="btn-secondary">Preview Markdown</button>
+                        <button @click="exportStoryboard(activeSequenceId)" class="btn-secondary">Export Markdown</button>
+                    </div>
+                </div>
+            </aside>
         </main>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="toast" :class="toast.type" x-text="toast.message"></div>
+        </template>
     </div>
 
     <!-- Marker Note Modal -->
@@ -170,6 +306,29 @@
             <pre class="markdown-preview" x-text="markdownPreviewContent"></pre>
             <div class="modal-actions">
                 <button @click="closeMarkdownPreview()" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcut Help Modal -->
+    <div class="modal-backdrop" x-show="shortcutHelpOpen" x-cloak @click="shortcutHelpOpen = false">
+        <div class="modal-card modal-wide" @click.stop>
+            <h3>Keyboard Shortcuts</h3>
+            <div class="shortcut-grid">
+                <div><kbd>Space</kbd> Play / Pause</div>
+                <div><kbd>J</kbd> / <kbd>L</kbd> Shuttle reverse / forward</div>
+                <div><kbd>K</kbd> Pause</div>
+                <div><kbd>←</kbd> / <kbd>→</kbd> Step -1s / +1s</div>
+                <div><kbd>↑</kbd> / <kbd>↓</kbd> Previous / Next clip</div>
+                <div><kbd>K</kbd> Keep selected clip</div>
+                <div><kbd>X</kbd> Reject selected clip</div>
+                <div><kbd>U</kbd> Clear rating</div>
+                <div><kbd>1</kbd>–<kbd>9</kbd> Apply tag from palette</div>
+                <div><kbd>F</kbd> Toggle focus mode</div>
+                <div><kbd>?</kbd> Show this help</div>
+            </div>
+            <div class="modal-actions">
+                <button @click="shortcutHelpOpen = false" class="btn-secondary">Close</button>
             </div>
         </div>
     </div>

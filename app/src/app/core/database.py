@@ -15,7 +15,9 @@ class MediaClip(Base):
     frame_rate = Column(Float)
     orientation = Column(String)  # 'horizontal' | 'vertical'
     proxy_path = Column(String)
+    thumbnail_path = Column(String)
     is_kept = Column(Boolean, default=False)
+    is_rejected = Column(Boolean, default=False)
     tags = relationship("Tag", back_populates="clip", cascade="all, delete-orphan")
 
 class Tag(Base):
@@ -76,11 +78,14 @@ class DatabaseManager:
         with self.get_session() as session:
             return session.query(MediaClip).all()
 
-    def update_clip_status(self, clip_id: str, is_kept: bool):
+    def update_clip_status(self, clip_id: str, is_kept: bool | None = None, is_rejected: bool | None = None):
         with self.get_session() as session:
             clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
             if clip:
-                clip.is_kept = is_kept
+                if is_kept is not None:
+                    clip.is_kept = is_kept
+                if is_rejected is not None:
+                    clip.is_rejected = is_rejected
                 session.commit()
 
     def create_sequence(self, name: str) -> Sequence:
@@ -93,11 +98,76 @@ class DatabaseManager:
 
     def add_sequence_item(self, sequence_id: str, clip_id: str, position: int, notes: str = None) -> SequenceItem:
         with self.get_session() as session:
+            # Shift existing items at or after the target position to make room
+            existing_items = session.query(SequenceItem).filter(
+                SequenceItem.sequence_id == sequence_id,
+                SequenceItem.position >= position
+            ).order_by(SequenceItem.position.desc()).all()
+            for existing in existing_items:
+                existing.position += 1
             item = SequenceItem(sequence_id=sequence_id, clip_id=clip_id, position=position, notes=notes)
             session.add(item)
             session.commit()
             session.refresh(item)
             return item
+
+    def remove_sequence_item(self, item_id: str):
+        with self.get_session() as session:
+            item = session.query(SequenceItem).filter(SequenceItem.id == item_id).first()
+            if item:
+                sequence_id = item.sequence_id
+                position = item.position
+                session.delete(item)
+                # Compact positions after removal
+                remaining = session.query(SequenceItem).filter(
+                    SequenceItem.sequence_id == sequence_id,
+                    SequenceItem.position > position
+                ).order_by(SequenceItem.position).all()
+                for idx, remaining_item in enumerate(remaining):
+                    remaining_item.position = position + idx
+                session.commit()
+
+    def reorder_sequence_items(self, sequence_id: str, item_ids: list[str]):
+        with self.get_session() as session:
+            items = session.query(SequenceItem).filter(SequenceItem.sequence_id == sequence_id).all()
+            item_map = {item.id: item for item in items}
+            for new_position, item_id in enumerate(item_ids):
+                if item_id in item_map:
+                    item_map[item_id].position = new_position
+            session.commit()
+
+    def get_sequence_items_with_clips(self, sequence_id: str):
+        with self.get_session() as session:
+            items = (
+                session.query(SequenceItem)
+                .filter(SequenceItem.sequence_id == sequence_id)
+                .order_by(SequenceItem.position)
+                .all()
+            )
+            results = []
+            for item in items:
+                clip = session.query(MediaClip).filter(MediaClip.id == item.clip_id).first()
+                results.append({
+                    "id": item.id,
+                    "sequence_id": item.sequence_id,
+                    "clip_id": item.clip_id,
+                    "position": item.position,
+                    "notes": item.notes,
+                    "clip": {
+                        "id": clip.id,
+                        "file_path": clip.file_path,
+                        "file_name": clip.file_name,
+                        "resolution": clip.resolution,
+                        "frame_rate": clip.frame_rate,
+                        "orientation": clip.orientation,
+                        "proxy_path": clip.proxy_path,
+                        "thumbnail_path": clip.thumbnail_path,
+                        "is_kept": clip.is_kept,
+                        "is_rejected": clip.is_rejected,
+                        "tags": [{"id": t.id, "tag_type": t.tag_type, "value": t.value} for t in clip.tags]
+                    } if clip else None
+                })
+            return results
 
     def add_tag(self, clip_id: str, tag_type: str, value: str):
         with self.get_session() as session:
@@ -150,7 +220,9 @@ class DatabaseManager:
                     "frame_rate": clip.frame_rate,
                     "orientation": clip.orientation,
                     "proxy_path": clip.proxy_path,
+                    "thumbnail_path": clip.thumbnail_path,
                     "is_kept": clip.is_kept,
+                    "is_rejected": clip.is_rejected,
                     "tags": [{"id": t.id, "tag_type": t.tag_type, "value": t.value} for t in clip.tags]
                 }
                 results.append(clip_dict)

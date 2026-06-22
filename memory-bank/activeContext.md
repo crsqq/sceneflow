@@ -1,22 +1,25 @@
 # Active Context: SceneFlow
 
 ## Current Focus
-- Frontend integration for media scanning, clip management, and storyboarding.
-- Refining UI/UX responsiveness and error handling.
+- Creative workflow UX: keyboard-driven culling, preset tagging, drag-and-drop Blueprint sequencing, and cinematic dark UI.
+- Bridging the gap between raw footage review and sequence assembly without touching source media.
 
 ## Recent Changes
-- Completed backend implementation for all core phases (1-7):
-    - Scaffolding (Electron + FastAPI).
-    - Backend Core (Database, Media Engine with proxy logic, Telemetry).
-    - Communication Layer (REST & WebSockets).
-    - Frontend Shell.
-    - Media Ingestion & Proxying (Scanning, proxy generation).
-    - Culling & Tagging UI logic.
-    - Storyboarding & Markdown Export backend.
-- Finalized the initial Memory Bank structure and content.
+- Added three-state culling model (`is_kept` / `is_rejected`) to the backend and UI.
+- Added thumbnail generation alongside proxy generation.
+- Added scan progress telemetry (`scan_started`, `scan_progress`, `scan_complete`).
+- Added sequence item management endpoints: list, remove, reorder.
+- Implemented Electron native folder picker via `dialog.showOpenDialog`.
+- Rewrote frontend with:
+    - Dark cinematic theme.
+    - Keyboard shortcuts for playback (J/K/L shuttle, arrows, space), culling (K/X/U), and tagging (1–9).
+    - Preset creative tag palette.
+    - Cull and tag filters.
+    - Drag-and-drop Blueprint sequence builder.
+    - Toast notifications and shortcut help modal.
 
 ## Next Steps
-1. Connect frontend components to existing FastAPI endpoints (Scanning, Clip List, Tagging, Markers).
-2. Implement frontend state management for Sequences and Storyboarding.
-3. Improve error handling and user feedback during long-running media operations (via WebSockets).
-4. Conduct end-to-end testing of the media ingestion workflow.
+1. Run end-to-end test: scan a folder, cull with keyboard, tag with palette, build a Blueprint, export Markdown.
+2. Add automated tests for cull state, tag palette, and sequence reordering.
+3. Consider persisting user preferences (tag palette, auto-advance, focus mode) in localStorage.
+4. Evaluate thumbnail extraction performance on large directories.
