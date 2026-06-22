@@ -30,7 +30,8 @@ class ClipMarker(Base):
     __tablename__ = 'clip_markers'
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     clip_id = Column(String, ForeignKey('media_clips.id'))
-    timestamp = Column(Float, nullable=False)  # Seconds from start
+    timestamp = Column(Float, nullable=False)  # Section start in seconds
+    end_timestamp = Column(Float, nullable=True)  # Section end in seconds (optional)
     note = Column(String)
 
 class Sequence(Base):
@@ -112,10 +113,10 @@ class DatabaseManager:
                 session.delete(tag)
                 session.commit()
 
-    def add_marker(self, clip_id: str, timestamp: float, note: str = None):
+    def add_marker(self, clip_id: str, timestamp: float, end_timestamp: float = None, note: str = None):
         with self.get_session() as session:
             from app.core.database import ClipMarker
-            marker = ClipMarker(clip_id=clip_id, timestamp=timestamp, note=note)
+            marker = ClipMarker(clip_id=clip_id, timestamp=timestamp, end_timestamp=end_timestamp, note=note)
             session.add(marker)
             session.commit()
             session.refresh(marker)
@@ -125,7 +126,7 @@ class DatabaseManager:
         with self.get_session() as session:
             from app.core.database import ClipMarker
             markers = session.query(ClipMarker).filter(ClipMarker.clip_id == clip_id).all()
-            return [{"id": m.id, "timestamp": m.timestamp, "note": m.note} for m in markers]
+            return [{"id": m.id, "timestamp": m.timestamp, "end_timestamp": m.end_timestamp, "note": m.note} for m in markers]
 
     def remove_marker(self, marker_id: str):
         with self.get_session() as session:

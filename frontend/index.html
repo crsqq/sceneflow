@@ -32,18 +32,27 @@
                         <div class="markers-overlay" x-show="markers.length > 0">
                             <template x-for="marker in markers" :key="marker.id">
                                 <div 
-                                    class="marker-indicator"
-                                    :style="getMarkerPosition(marker)"
+                                    class="marker-range"
+                                    :style="getMarkerRangeStyle(marker)"
                                     @click="seekTo(marker.timestamp)"
-                                    title="Marker: " + formatTime(marker.timestamp) + (marker.note ? ' - ' + marker.note : '')
+                                    :title="'Section: ' + formatTime(marker.timestamp) + (marker.end_timestamp ? ' – ' + formatTime(marker.end_timestamp) : '') + (marker.note ? ' | ' + marker.note : '')"
                                 ></div>
                             </template>
                         </div>
                     </div>
                     <div class="player-controls" x-show="selectedClip">
-                        <button @click="addMarker()">Add Marker</button>
-                        <!-- Hidden input for marker note (for Electron compatibility) -->
-                        <input type="text" x-ref="markerNoteInput" class="hidden-input" style="display: none;">
+                        <button @click="setMarkerStart()" :class="pendingMarkerStart !== null ? 'btn-active' : ''">
+                            <span x-text="pendingMarkerStart !== null ? 'Start: ' + formatTime(pendingMarkerStart) : 'Set Start'"></span>
+                        </button>
+                        <button @click="setMarkerEnd()" :disabled="pendingMarkerStart === null">
+                            Set End
+                        </button>
+                        <button @click="cancelMarkerRange()" class="btn-secondary" x-show="pendingMarkerStart !== null">
+                            Cancel
+                        </button>
+                        <button @click="addSingleMarker()" class="btn-secondary">
+                            Add Marker
+                        </button>
                     </div>
                     <div class="markers-panel" x-show="selectedClip">
                         <h4 style="display: flex; justify-content: space-between; align-items: center;">
@@ -52,11 +61,16 @@
                         </h4>
                         <ul class="marker-list" x-show="markers.length > 0">
                             <template x-for="marker in markers" :key="marker.id">
-                                <li>
-                                    <span @click="seekTo(marker.timestamp)" x-text="formatTime(marker.timestamp)"></span>
-                                    <span class="marker-note" x-text="marker.note"></span>
-                                    <button @click="removeMarker(marker.id)" class="btn-delete">&times;</button>
-                                </li>
+                            <li>
+                                <span @click="seekTo(marker.timestamp)">
+                                    <span x-text="formatTime(marker.timestamp)"></span>
+                                    <template x-if="marker.end_timestamp">
+                                        <span x-text="' – ' + formatTime(marker.end_timestamp)"></span>
+                                    </template>
+                                </span>
+                                <span class="marker-note" x-text="marker.note"></span>
+                                <button @click="removeMarker(marker.id)" class="btn-delete">&times;</button>
+                            </li>
                             </template>
                         </ul>
                         <p x-show="markers.length === 0" style="font-size: 0.8em; color: #999; text-align: center;">No markers yet.</p>
@@ -87,7 +101,7 @@
                             </div>
 
                             <div class="clip-actions">
-                                <button @click="toggleKeep(clip.id, clip.is_kept)" 
+                                <button @click.stop="toggleKeep(clip.id, clip.is_kept)" 
                                         :class="clip.is_kept ? 'btn-keep active' : 'btn-keep'">
                                     <span x-text="clip.is_kept ? '✓ Kept' : 'Keep'"></span>
                                 </button>
@@ -124,7 +138,10 @@
                     <template x-for="seq in sequences" :key="seq.id">
                         <li>
                             <span x-text="seq.name"></span>
-                            <button @click="exportStoryboard(seq.id)" class="btn-secondary">Export Markdown</button>
+                            <div class="sequence-actions">
+                                <button @click="previewStoryboard(seq.id)" class="btn-secondary">Preview Markdown</button>
+                                <button @click="exportStoryboard(seq.id)" class="btn-secondary">Export Markdown</button>
+                            </div>
                         </li>
                     </template>
                 </ul>
@@ -132,6 +149,29 @@
             </div>
             </div>
         </main>
+    </div>
+
+    <!-- Marker Note Modal -->
+    <div class="modal-backdrop" x-show="markerNoteModalOpen" x-cloak @click="closeMarkerNoteModal()">
+        <div class="modal-card" @click.stop>
+            <h3 x-text="markerNoteModalTitle">Marker Note</h3>
+            <textarea x-model="markerNoteDraft" rows="3" placeholder="Enter note (optional)"></textarea>
+            <div class="modal-actions">
+                <button @click="submitMarkerNote()" class="btn-primary">OK</button>
+                <button @click="closeMarkerNoteModal()" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Markdown Preview Modal -->
+    <div class="modal-backdrop" x-show="markdownPreviewOpen" x-cloak @click="closeMarkdownPreview()">
+        <div class="modal-card modal-wide" @click.stop>
+            <h3>Markdown Preview</h3>
+            <pre class="markdown-preview" x-text="markdownPreviewContent"></pre>
+            <div class="modal-actions">
+                <button @click="closeMarkdownPreview()" class="btn-secondary">Close</button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

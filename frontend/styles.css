@@ -204,7 +204,13 @@ header h1 {
 }
 
 .preview-section video {
-    width: 100%;
+    max-width: 100%;
+    max-height: 70vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
     background: #000;
 }
 
@@ -244,25 +250,23 @@ header h1 {
     pointer-events: none;
 }
 
-.marker-indicator {
+.marker-range {
     position: absolute;
     bottom: 0;
-    width: 8px;
     height: 100%;
-    background-color: #e74c3c;
+    background-color: rgba(231, 76, 60, 0.85);
     cursor: pointer;
     border-radius: 2px;
-    transform: translateX(-50%);
     pointer-events: all;
     box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
     z-index: 10;
+    transition: background-color 0.2s, height 0.2s;
 }
 
-.marker-indicator:hover {
-    background-color: #c0392b;
-    width: 12px;
-    height: 120%;
-    transform: translateX(-50%) translateY(-10%);
+.marker-range:hover {
+    background-color: rgba(192, 57, 43, 0.95);
+    height: 140%;
+    transform: translateY(-14%);
     box-shadow: 0 0 8px rgba(231, 76, 60, 0.8), 0 0 12px rgba(231, 76, 60, 0.6);
     z-index: 20;
 }
@@ -272,6 +276,115 @@ header h1 {
 /* Player Controls & Markers */
 .player-controls {
     margin: 10px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.player-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-active {
+    background-color: #2ecc71 !important;
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-backdrop[x-cloak] {
+    display: none !important;
+}
+
+.modal-card {
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-card.modal-wide {
+    max-width: 800px;
+    max-height: 80vh;
+}
+
+.markdown-preview {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 16px;
+    overflow: auto;
+    max-height: 60vh;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.9em;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.modal-card h3 {
+    margin: 0;
+    color: var(--primary-color);
+}
+
+.modal-card textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 1em;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal-actions button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+}
+
+.btn-primary {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #2980b9;
+}
+
+.btn-secondary {
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background-color: #d0d0d0;
 }
 
 .markers-panel {
@@ -319,6 +432,31 @@ header h1 {
     color: #e74c3c;
     font-size: 1.2em;
     cursor: pointer;
+}
+
+.sequence-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sequence-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    gap: 10px;
+}
+
+.sequence-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.sequence-actions button {
+    padding: 6px 12px;
+    font-size: 0.85em;
 }
 
 /* Clip List Selection */

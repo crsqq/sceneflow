@@ -31,6 +31,7 @@ class TagRequest(BaseModel):
 
 class MarkerRequest(BaseModel):
     timestamp: float
+    end_timestamp: float | None = None
     note: str | None = None
 
 @app.on_event("startup")
@@ -68,7 +69,7 @@ async def add_tag(clip_id: str, request: TagRequest):
 
 @app.post("/clips/{clip_id}/markers")
 async def add_marker(clip_id: str, request: MarkerRequest):
-    db_manager.add_marker(clip_id, request.timestamp, request.note)
+    db_manager.add_marker(clip_id, request.timestamp, request.end_timestamp, request.note)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "marker_added"}
 

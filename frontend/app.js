@@ -1,10 +1,17 @@
 document.addEventListener('alpine:init', () => {
         Alpine.data('app', () => ({
-             status: 'Initializing...',
-             scanPath: '/Users/crs/Desktop/test1/',
-             clips: [],
+            status: 'Initializing...',
+            scanPath: '/Users/crs/Desktop/test1/',
+            clips: [],
             selectedClip: null,
             markers: [],
+            pendingMarkerStart: null,
+            markerNoteModalOpen: false,
+            markerNoteModalTitle: 'Marker Note',
+            markerNoteDraft: '',
+            markerNoteResolve: null,
+            markdownPreviewOpen: false,
+            markdownPreviewContent: '',
 
             async init() {
             console.log('SceneFlow App Initialized');
@@ -86,44 +93,88 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async addMarker() {
-            console.log('Add Marker clicked');
-            // Debug alert to confirm the function is called
-            console.log('Attempting to add marker for clip:', this.selectedClip?.id);
+        getPlayer() {
+            return this.$refs.player || document.querySelector('video');
+        },
 
+        setMarkerStart() {
+            const player = this.getPlayer();
+            if (!player) {
+                alert('Error: Video player not found.');
+                return;
+            }
+            this.pendingMarkerStart = player.currentTime;
+            console.log('Marker start set:', this.pendingMarkerStart);
+        },
+
+        cancelMarkerRange() {
+            this.pendingMarkerStart = null;
+        },
+
+        async setMarkerEnd() {
+            if (this.pendingMarkerStart === null) {
+                alert('Please set a start time first.');
+                return;
+            }
             if (!this.selectedClip) {
-                console.warn('No selected clip for adding marker');
-                alert('Please select a clip first!');
+                alert('Please select a clip first.');
                 return;
             }
 
-            // Try to find the video element via $refs or querySelector as a fallback
-            const player = this.$refs.player || document.querySelector('video');
-            console.log('Player element found:', player);
-
+            const player = this.getPlayer();
             if (!player) {
-                console.error('Video player not found');
-                alert('Error: Video player element could not be located.');
+                alert('Error: Video player not found.');
+                return;
+            }
+
+            const endTimestamp = player.currentTime;
+            if (endTimestamp <= this.pendingMarkerStart) {
+                alert('End time must be after start time.');
+                return;
+            }
+
+            const note = await this.openMarkerNoteModal('Section Note');
+            if (note === null) {
+                // User cancelled; keep start pending so they can retry
+                return;
+            }
+
+            await this.saveMarker(this.pendingMarkerStart, endTimestamp, note);
+            this.pendingMarkerStart = null;
+        },
+
+        async addSingleMarker() {
+            if (!this.selectedClip) {
+                alert('Please select a clip first.');
+                return;
+            }
+
+            const player = this.getPlayer();
+            if (!player) {
+                alert('Error: Video player not found.');
                 return;
             }
 
             const timestamp = player.currentTime;
-            console.log('Current video timestamp:', timestamp);
-
-            // Create a simple input element for note (avoiding prompt issues in Electron)
-            const note = await this.getMarkerNote();
+            const note = await this.openMarkerNoteModal('Marker Note');
             if (note === null) {
-                console.log('User cancelled marker note input');
-                return; // User cancelled input
+                return;
             }
 
+            await this.saveMarker(timestamp, null, note);
+        },
+
+        async saveMarker(timestamp, endTimestamp, note) {
             try {
-                this.status = 'Adding marker...';
-                console.log('Sending marker request to backend...');
+                this.status = endTimestamp ? 'Adding section...' : 'Adding marker...';
                 const response = await fetch(`http://localhost:8000/clips/${this.selectedClip.id}/markers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ timestamp, note })
+                    body: JSON.stringify({
+                        timestamp,
+                        end_timestamp: endTimestamp,
+                        note
+                    })
                 });
 
                 if (!response.ok) {
@@ -131,110 +182,39 @@ document.addEventListener('alpine:init', () => {
                     throw new Error(`Backend error: ${response.status} - ${errorText}`);
                 }
 
-                console.log('Marker added successfully');
-                // Refresh markers for the current clip
                 await this.fetchMarkers(this.selectedClip.id);
-                this.status = 'Marker added';
+                this.status = endTimestamp ? 'Section added' : 'Marker added';
                 setTimeout(() => { this.status = 'Ready'; }, 2000);
             } catch (error) {
-                console.error('Error adding marker:', error);
-                this.status = 'Failed to add marker';
-                alert(`Error adding marker: ${error.message}`);
+                console.error('Error adding marker/section:', error);
+                this.status = 'Failed to add marker/section';
+                alert(`Error: ${error.message}`);
             }
         },
 
-        getMarkerNote() {
+        openMarkerNoteModal(title) {
+            this.markerNoteModalTitle = title;
+            this.markerNoteDraft = '';
+            this.markerNoteModalOpen = true;
             return new Promise((resolve) => {
-                // Create a simple input dialog using DOM elements
-                const noteInput = document.createElement('input');
-                noteInput.type = 'text';
-                noteInput.placeholder = 'Enter marker note (optional)';
-                noteInput.style.cssText = `
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    padding: 8px;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                    z-index: 1000;
-                    background: white;
-                `;
-                
-                const overlay = document.createElement('div');
-                overlay.style.cssText = `
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.5);
-                    z-index: 999;
-                `;
-                
-                const submitBtn = document.createElement('button');
-                submitBtn.textContent = 'OK';
-                submitBtn.style.cssText = `
-                    position: fixed;
-                    top: 55%;
-                    left: 45%;
-                    transform: translate(-50%, -50%);
-                    padding: 8px 16px;
-                    background: #3498db;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    z-index: 1000;
-                `;
-                
-                const cancelBtn = document.createElement('button');
-                cancelBtn.textContent = 'Cancel';
-                cancelBtn.style.cssText = `
-                    position: fixed;
-                    top: 55%;
-                    left: 55%;
-                    transform: translate(-50%, -50%);
-                    padding: 8px 16px;
-                    background: #e74c3c;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    z-index: 1000;
-                `;
-                
-                const handleOk = () => {
-                    document.body.removeChild(overlay);
-                    document.body.removeChild(noteInput);
-                    document.body.removeChild(submitBtn);
-                    document.body.removeChild(cancelBtn);
-                    resolve(noteInput.value);
-                };
-                
-                const handleCancel = () => {
-                    document.body.removeChild(overlay);
-                    document.body.removeChild(noteInput);
-                    document.body.removeChild(submitBtn);
-                    document.body.removeChild(cancelBtn);
-                    resolve(null);
-                };
-                
-                noteInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') handleOk();
-                });
-                
-                submitBtn.addEventListener('click', handleOk);
-                cancelBtn.addEventListener('click', handleCancel);
-                
-                document.body.appendChild(overlay);
-                document.body.appendChild(noteInput);
-                document.body.appendChild(submitBtn);
-                document.body.appendChild(cancelBtn);
-                
-                // Focus the input
-                noteInput.focus();
+                this.markerNoteResolve = resolve;
             });
+        },
+
+        submitMarkerNote() {
+            if (this.markerNoteResolve) {
+                this.markerNoteResolve(this.markerNoteDraft);
+                this.markerNoteResolve = null;
+            }
+            this.markerNoteModalOpen = false;
+        },
+
+        closeMarkerNoteModal() {
+            if (this.markerNoteResolve) {
+                this.markerNoteResolve(null);
+                this.markerNoteResolve = null;
+            }
+            this.markerNoteModalOpen = false;
         },
 
         async removeMarker(markerId) {
@@ -266,13 +246,15 @@ document.addEventListener('alpine:init', () => {
             return date.toISOString().substr(11, 8);
         },
 
-        getMarkerPosition(marker) {
-            // Fallback to 1 second duration if duration not available
+        getMarkerRangeStyle(marker) {
             const duration = this.selectedClip?.duration || 1;
-            const position = (marker.timestamp / duration) * 100;
-            // Ensure position is within bounds (0-100%)
-            const boundedPosition = Math.max(0, Math.min(100, position));
-            return `left: ${boundedPosition}%`;
+            const start = Math.max(0, Math.min(1, marker.timestamp / duration));
+            const end = marker.end_timestamp
+                ? Math.max(0, Math.min(1, marker.end_timestamp / duration))
+                : start;
+            const left = start * 100;
+            const width = Math.max(0.5, (end - start) * 100);
+            return `left: ${left}%; width: ${width}%`;
         },
 
         async fetchSequences() {
@@ -318,8 +300,7 @@ document.addEventListener('alpine:init', () => {
 
         async exportStoryboard(sequenceId) {
             try {
-                const response = await fetch(`http://localhost:8000/sequences/${sequenceId}/export`);
-                const markdown = await response.text();
+                const markdown = await this.fetchStoryboardMarkdown(sequenceId);
                 const blob = new Blob([markdown], { type: 'text/markdown' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -332,14 +313,51 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async toggleKeep(clipId, currentState) {
+        async previewStoryboard(sequenceId) {
             try {
-                const response = await fetch(`http://localhost:8000/clips/${clipId}/status?is_kept=${!currentState}`, {
+                this.markdownPreviewContent = await this.fetchStoryboardMarkdown(sequenceId);
+                this.markdownPreviewOpen = true;
+            } catch (error) {
+                console.error('Error previewing storyboard:', error);
+                this.status = 'Failed to load preview';
+            }
+        },
+
+        closeMarkdownPreview() {
+            this.markdownPreviewOpen = false;
+            this.markdownPreviewContent = '';
+        },
+
+        async fetchStoryboardMarkdown(sequenceId) {
+            const response = await fetch(`http://localhost:8000/sequences/${sequenceId}/export`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return await response.text();
+        },
+
+        async toggleKeep(clipId, currentState) {
+            const newState = !currentState;
+
+            // Optimistically update local state so the UI flips immediately
+            const clip = this.clips.find(c => c.id === clipId);
+            if (clip) {
+                clip.is_kept = newState;
+            }
+            if (this.selectedClip && this.selectedClip.id === clipId) {
+                this.selectedClip.is_kept = newState;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:8000/clips/${clipId}/status?is_kept=${newState}`, {
                     method: 'POST'
                 });
                 if (!response.ok) throw new Error('Failed to update status');
             } catch (error) {
                 console.error('Error toggling keep:', error);
+                // Revert on error
+                if (clip) clip.is_kept = currentState;
+                if (this.selectedClip && this.selectedClip.id === clipId) {
+                    this.selectedClip.is_kept = currentState;
+                }
             }
         },
 
