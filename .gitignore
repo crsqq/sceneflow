@@ -33,3 +33,7 @@ out/
 # Logs and other
 *.log
 .env
+
+# Database
+sceneflow.db
+app/sceneflow.db
