@@ -46,6 +46,30 @@ document.addEventListener('alpine:init', () => {
             this.selectedClip = clip;
             this.markers = []; 
             await this.fetchMarkers(clip.id);
+            
+            // Try to get video duration when clip is selected
+            if (this.$refs.player) {
+                const player = this.$refs.player;
+                // Wait for metadata to load
+                const handleMetadataLoaded = () => {
+                    if (this.selectedClip) {
+                        this.selectedClip.duration = player.duration;
+                        // Remove event listener after first load
+                        player.removeEventListener('loadedmetadata', handleMetadataLoaded);
+                    }
+                };
+                player.addEventListener('loadedmetadata', handleMetadataLoaded);
+                
+                // Also set up a fallback in case metadata doesn't load
+                setTimeout(() => {
+                    if (this.selectedClip && !this.selectedClip.duration) {
+                        // Try to get duration from video element if it's already loaded
+                        if (player.duration && player.duration > 0) {
+                            this.selectedClip.duration = player.duration;
+                        }
+                    }
+                }, 1000);
+            }
         },
 
         async fetchMarkers(clipId) {
@@ -86,10 +110,11 @@ document.addEventListener('alpine:init', () => {
             const timestamp = player.currentTime;
             console.log('Current video timestamp:', timestamp);
 
-            const note = prompt('Enter marker note (optional):');
+            // Create a simple input element for note (avoiding prompt issues in Electron)
+            const note = await this.getMarkerNote();
             if (note === null) {
-                console.log('User cancelled marker note prompt');
-                return; // User cancelled prompt
+                console.log('User cancelled marker note input');
+                return; // User cancelled input
             }
 
             try {
@@ -116,6 +141,100 @@ document.addEventListener('alpine:init', () => {
                 this.status = 'Failed to add marker';
                 alert(`Error adding marker: ${error.message}`);
             }
+        },
+
+        getMarkerNote() {
+            return new Promise((resolve) => {
+                // Create a simple input dialog using DOM elements
+                const noteInput = document.createElement('input');
+                noteInput.type = 'text';
+                noteInput.placeholder = 'Enter marker note (optional)';
+                noteInput.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    padding: 8px;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    z-index: 1000;
+                    background: white;
+                `;
+                
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 999;
+                `;
+                
+                const submitBtn = document.createElement('button');
+                submitBtn.textContent = 'OK';
+                submitBtn.style.cssText = `
+                    position: fixed;
+                    top: 55%;
+                    left: 45%;
+                    transform: translate(-50%, -50%);
+                    padding: 8px 16px;
+                    background: #3498db;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    z-index: 1000;
+                `;
+                
+                const cancelBtn = document.createElement('button');
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.style.cssText = `
+                    position: fixed;
+                    top: 55%;
+                    left: 55%;
+                    transform: translate(-50%, -50%);
+                    padding: 8px 16px;
+                    background: #e74c3c;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    z-index: 1000;
+                `;
+                
+                const handleOk = () => {
+                    document.body.removeChild(overlay);
+                    document.body.removeChild(noteInput);
+                    document.body.removeChild(submitBtn);
+                    document.body.removeChild(cancelBtn);
+                    resolve(noteInput.value);
+                };
+                
+                const handleCancel = () => {
+                    document.body.removeChild(overlay);
+                    document.body.removeChild(noteInput);
+                    document.body.removeChild(submitBtn);
+                    document.body.removeChild(cancelBtn);
+                    resolve(null);
+                };
+                
+                noteInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleOk();
+                });
+                
+                submitBtn.addEventListener('click', handleOk);
+                cancelBtn.addEventListener('click', handleCancel);
+                
+                document.body.appendChild(overlay);
+                document.body.appendChild(noteInput);
+                document.body.appendChild(submitBtn);
+                document.body.appendChild(cancelBtn);
+                
+                // Focus the input
+                noteInput.focus();
+            });
         },
 
         async removeMarker(markerId) {
@@ -145,6 +264,15 @@ document.addEventListener('alpine:init', () => {
             const date = new Date(0);
             date.setSeconds(seconds);
             return date.toISOString().substr(11, 8);
+        },
+
+        getMarkerPosition(marker) {
+            // Fallback to 1 second duration if duration not available
+            const duration = this.selectedClip?.duration || 1;
+            const position = (marker.timestamp / duration) * 100;
+            // Ensure position is within bounds (0-100%)
+            const boundedPosition = Math.max(0, Math.min(100, position));
+            return `left: ${boundedPosition}%`;
         },
 
         async fetchSequences() {

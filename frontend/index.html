@@ -21,14 +21,29 @@
             <div class="layout">
                 <!-- Video Preview Section -->
                 <div class="preview-section" x-show="selectedClip">
-                    <video 
-                        x-ref="player" 
-                        :src="selectedClip ? 'http://localhost:8000/proxy/' + selectedClip.id : ''" 
-                        controls 
-                        autoplay
-                    ></video>
+                    <div class="video-container">
+                        <video 
+                            x-ref="player" 
+                            :src="selectedClip ? 'http://localhost:8000/proxy/' + selectedClip.id : ''" 
+                            controls 
+                            autoplay
+                        ></video>
+                        <!-- Visual markers overlay -->
+                        <div class="markers-overlay" x-show="markers.length > 0">
+                            <template x-for="marker in markers" :key="marker.id">
+                                <div 
+                                    class="marker-indicator"
+                                    :style="getMarkerPosition(marker)"
+                                    @click="seekTo(marker.timestamp)"
+                                    title="Marker: " + formatTime(marker.timestamp) + (marker.note ? ' - ' + marker.note : '')
+                                ></div>
+                            </template>
+                        </div>
+                    </div>
                     <div class="player-controls" x-show="selectedClip">
                         <button @click="addMarker()">Add Marker</button>
+                        <!-- Hidden input for marker note (for Electron compatibility) -->
+                        <input type="text" x-ref="markerNoteInput" class="hidden-input" style="display: none;">
                     </div>
                     <div class="markers-panel" x-show="selectedClip">
                         <h4 style="display: flex; justify-content: space-between; align-items: center;">

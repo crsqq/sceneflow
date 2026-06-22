@@ -227,6 +227,61 @@ header h1 {
     overflow-y: auto;
 }
 
+/* Video with markers overlay */
+.video-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.markers-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.marker-indicator {
+    position: absolute;
+    bottom: 0;
+    width: 8px;
+    height: 100%;
+    background-color: #e74c3c;
+    cursor: pointer;
+    border-radius: 2px;
+    transform: translateX(-50%);
+    pointer-events: all;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+.marker-indicator:hover {
+    background-color: #c0392b;
+    width: 12px;
+    height: 120%;
+    transform: translateX(-50%) translateY(-10%);
+    box-shadow: 0 0 8px rgba(231, 76, 60, 0.8), 0 0 12px rgba(231, 76, 60, 0.6);
+    z-index: 20;
+}
+
+/* Ensure markers are visible on dark background */
+
+/* Player Controls & Markers */
+.player-controls {
+    margin: 10px 0;
+}
+
+.markers-panel {
+    background: white;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 .markers-panel h4 {
     margin-top: 0;
     border-bottom: 1px solid #eee;
