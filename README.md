@@ -33,7 +33,7 @@ uv sync
 To start the backend server:
 
 ```bash
-uv run uvicorn main:app --reload
+uv run uvicorn app.main:app --reload --app-dir src
 ```
 
 ### 2. Frontend (Electron)

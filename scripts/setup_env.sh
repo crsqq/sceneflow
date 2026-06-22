@@ -26,5 +26,5 @@ else
 fi
 
 echo "✅ Setup complete!"
-echo "To start the backend: cd app && uv run uvicorn main:app --reload"
+echo "To start the backend: cd app && uv run uvicorn app.main:app --reload --app-dir src"
 echo "To start the frontend shell: npm start"
