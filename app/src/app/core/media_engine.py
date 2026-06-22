@@ -16,7 +16,10 @@ class MediaProcessor:
         video_extensions = ('.mp4', '.mov', '.mkv', '.avi')
         clips = []
         
-        for root, _, files in os.walk(path):
+        for root, dirs, files in os.walk(path):
+            # Skip .sceneflow directories
+            dirs[:] = [d for d in dirs if d != '.sceneflow']
+            
             for file in files:
                 if file.lower().endswith(video_extensions):
                     full_path = os.path.join(root, file)
