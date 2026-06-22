@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SceneFlow</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="app">
+    <div class="container">
+        <header>
+            <h1>SceneFlow</h1>
+        </header>
+        <main>
+            <div class="status-bar">
+                Status: <span x-text="status"></span>
+            </div>
+            <div class="controls">
+                <input type="text" x-model="scanPath" placeholder="Enter media directory path...">
+                <button @click="scanDirectory()">Scan Directory</button>
+            </div>
+            <div class="content">
+                <h3>Discovered Clips</h3>
+                <ul class="clip-list">
+                    <template x-for="clip in clips" :key="clip.id">
+                        <li :class="{ 'is-kept': clip.is_kept, 'is-processing': proxyStatuses[clip.id] === 'generating' }">
+                            <div class="clip-main">
+                                <div class="clip-info">
+                                    <span class="file-name" x-text="clip.file_name"></span> 
+                                    <span class="resolution" x-text="'(' + clip.resolution + ')'"></span>
+                                </div>
+                                <div class="clip-tags" x-show="clip.tags && clip.tags.length > 0">
+                                    <template x-for="tag in clip.tags" :key="tag.id">
+                                        <span class="tag-pill" x-text="tag.value"></span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div class="clip-actions">
+                                <button @click="toggleKeep(clip.id, clip.is_kept)" 
+                                        :class="clip.is_kept ? 'btn-keep active' : 'btn-keep'">
+                                    <span x-text="clip.is_kept ? '✓ Kept' : 'Keep'"></span>
+                                </button>
+
+                                <div class="tag-input-group" x-show="showTagInput === clip.id" @click.away="showTagInput = null">
+                                    <input type="text" x-model="newTagName" @keyup.enter="addTag(clip.id, 'creative', newTagName); showTagInput = null" placeholder="Add tag...">
+                                </div>
+                                <button @click="showTagInput = clip.id" class="btn-icon">+</button>
+                            </div>
+
+                            <div class="clip-status">
+                                <template x-if="proxyStatuses[clip.id] === 'generating'">
+                                    <span class="badge badge-info">Generating proxy...</span>
+                                </template>
+                                <template x-if="proxyStatuses[clip.id] === 'completed'">
+                                    <span class="badge badge-success">Proxy ready</span>
+                                </template>
+                                <template x-if="proxyStatuses[clip.id] === 'failed'">
+                                    <span class="badge badge-error">Proxy failed</span>
+                                </template>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+                <p x-show="clips.length === 0">No clips discovered yet.</p>
+            </div>
+
+            <div class="content" style="margin-top: 20px;">
+                <h3>Sequences</h3>
+                <div class="controls">
+                    <button @click="createSequenceFromKept()">Create Sequence from Kept Clips</button>
+                </div>
+                <ul class="sequence-list">
+                    <template x-for="seq in sequences" :key="seq.id">
+                        <li>
+                            <span x-text="seq.name"></span>
+                            <button @click="exportStoryboard(seq.id)" class="btn-secondary">Export Markdown</button>
+                        </li>
+                    </template>
+                </ul>
+                <p x-show="sequences.length === 0">No sequences created yet.</p>
+            </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
