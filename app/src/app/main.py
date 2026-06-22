@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from app.core.database import DatabaseManager, MediaClip
 from app.core.telemetry import TelemetryServer
@@ -28,6 +29,10 @@ class TagRequest(BaseModel):
     tag_type: str
     value: str
 
+class MarkerRequest(BaseModel):
+    timestamp: float
+    note: str | None = None
+
 @app.on_event("startup")
 async def startup_event():
     db_manager.init_db()
@@ -40,6 +45,15 @@ async def root():
 async def get_clips():
     return db_manager.get_all_clips_with_tags()
 
+@app.get("/proxy/{clip_id}")
+async def get_proxy(clip_id: str):
+    with db_manager.get_session() as session:
+        from app.core.database import MediaClip
+        clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
+        if not clip or not clip.proxy_path:
+            raise HTTPException(status_code=404, detail="Proxy not found")
+        return FileResponse(clip.proxy_path)
+
 @app.post("/clips/{clip_id}/status")
 async def update_clip_status(clip_id: str, is_kept: bool):
     db_manager.update_clip_status(clip_id, is_kept)
@@ -51,6 +65,22 @@ async def add_tag(clip_id: str, request: TagRequest):
     db_manager.add_tag(clip_id, request.tag_type, request.value)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "tag_added"}
+
+@app.post("/clips/{clip_id}/markers")
+async def add_marker(clip_id: str, request: MarkerRequest):
+    db_manager.add_marker(clip_id, request.timestamp, request.note)
+    await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
+    return {"status": "marker_added"}
+
+@app.get("/clips/{clip_id}/markers")
+async def get_markers(clip_id: str):
+    return db_manager.get_markers(clip_id)
+
+@app.delete("/clips/{clip_id}/markers/{marker_id}")
+async def remove_marker(clip_id: str, marker_id: str):
+    db_manager.remove_marker(marker_id)
+    await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
+    return {"status": "marker_removed"}
 
 @app.delete("/clips/{clip_id}/tags/{tag_id}")
 async def remove_tag(clip_id: str, tag_id: str):

@@ -17,16 +17,49 @@
             <div class="status-bar">
                 Status: <span x-text="status"></span>
             </div>
-            <div class="controls">
+
+            <div class="layout">
+                <!-- Video Preview Section -->
+                <div class="preview-section" x-show="selectedClip">
+                    <video 
+                        x-ref="player" 
+                        :src="selectedClip ? 'http://localhost:8000/proxy/' + selectedClip.id : ''" 
+                        controls 
+                        autoplay
+                    ></video>
+                    <div class="player-controls" x-show="selectedClip">
+                        <button @click="addMarker()">Add Marker</button>
+                    </div>
+                    <div class="markers-panel" x-show="selectedClip">
+                        <h4 style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Markers</span>
+                            <span class="badge badge-info" x-text="markers.length + ' total'"></span>
+                        </h4>
+                        <ul class="marker-list" x-show="markers.length > 0">
+                            <template x-for="marker in markers" :key="marker.id">
+                                <li>
+                                    <span @click="seekTo(marker.timestamp)" x-text="formatTime(marker.timestamp)"></span>
+                                    <span class="marker-note" x-text="marker.note"></span>
+                                    <button @click="removeMarker(marker.id)" class="btn-delete">&times;</button>
+                                </li>
+                            </template>
+                        </ul>
+                        <p x-show="markers.length === 0" style="font-size: 0.8em; color: #999; text-align: center;">No markers yet.</p>
+                    </div>
+                </div>
+
+                <!-- Sidebar/List Section -->
+                <div class="sidebar-section">
+                    <div class="controls">
                 <input type="text" x-model="scanPath" placeholder="Enter media directory path...">
                 <button @click="scanDirectory()">Scan Directory</button>
             </div>
             <div class="content">
                 <h3>Discovered Clips</h3>
-                <ul class="clip-list">
-                    <template x-for="clip in clips" :key="clip.id">
-                        <li :class="{ 'is-kept': clip.is_kept, 'is-processing': proxyStatuses[clip.id] === 'generating' }">
-                            <div class="clip-main">
+<ul class="clip-list">
+    <template x-for="clip in clips" :key="clip.id">
+        <li @click="selectClip(clip)" :class="{ 'is-kept': clip.is_kept, 'is-processing': proxyStatuses[clip.id] === 'generating', 'is-selected': selectedClip && selectedClip.id === clip.id }">
+            <div class="clip-main">
                                 <div class="clip-info">
                                     <span class="file-name" x-text="clip.file_name"></span> 
                                     <span class="resolution" x-text="'(' + clip.resolution + ')'"></span>

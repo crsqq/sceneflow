@@ -187,3 +187,102 @@ header h1 {
 .controls button:hover {
     background-color: #2980b9;
 }
+
+/* Layout */
+.layout {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 20px;
+}
+
+.preview-section {
+    background: #000;
+    padding: 10px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-section video {
+    width: 100%;
+    background: #000;
+}
+
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Player Controls & Markers */
+.player-controls {
+    margin: 10px 0;
+}
+
+.markers-panel {
+    background: white;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.markers-panel h4 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+.marker-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.marker-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 0.9em;
+    border-bottom: 1px solid #f9f9f9;
+}
+
+.marker-list span {
+    cursor: pointer;
+    color: var(--accent-color);
+}
+
+.marker-note {
+    flex-grow: 1;
+    color: #666;
+}
+
+.btn-delete {
+    background: none;
+    border: none;
+    color: #e74c3c;
+    font-size: 1.2em;
+    cursor: pointer;
+}
+
+/* Clip List Selection */
+.clip-list li {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.clip-list li:hover {
+    background-color: #f9f9f9;
+}
+
+.clip-list li.is-selected {
+    background-color: #e8f4fd;
+    border-left: 4px solid var(--accent-color);
+}
+
+@media (max-width: 900px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+}

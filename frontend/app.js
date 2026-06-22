@@ -1,10 +1,12 @@
 document.addEventListener('alpine:init', () => {
-    Alpine.data('app', () => ({
-        status: 'Initializing...',
-        scanPath: '',
-        clips: [],
+        Alpine.data('app', () => ({
+             status: 'Initializing...',
+             scanPath: '/Users/crs/Desktop/test1/',
+             clips: [],
+            selectedClip: null,
+            markers: [],
 
-        async init() {
+            async init() {
             console.log('SceneFlow App Initialized');
             this.status = 'Ready';
             this.proxyStatuses = {};
@@ -37,6 +39,112 @@ document.addEventListener('alpine:init', () => {
             // Initial fetch
             await this.fetchClips();
             await this.fetchSequences();
+        },
+
+        async selectClip(clip) {
+            console.log('Selecting clip:', clip);
+            this.selectedClip = clip;
+            this.markers = []; 
+            await this.fetchMarkers(clip.id);
+        },
+
+        async fetchMarkers(clipId) {
+            console.log('Fetching markers for clip:', clipId);
+            try {
+                const response = await fetch(`http://localhost:8000/clips/${clipId}/markers`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                console.log('Fetched markers:', data);
+                this.markers = Array.isArray(data) ? data : [];
+            } catch (error) {
+                console.error('Error fetching markers:', error);
+                this.markers = [];
+            }
+        },
+
+        async addMarker() {
+            console.log('Add Marker clicked');
+            // Debug alert to confirm the function is called
+            console.log('Attempting to add marker for clip:', this.selectedClip?.id);
+
+            if (!this.selectedClip) {
+                console.warn('No selected clip for adding marker');
+                alert('Please select a clip first!');
+                return;
+            }
+
+            // Try to find the video element via $refs or querySelector as a fallback
+            const player = this.$refs.player || document.querySelector('video');
+            console.log('Player element found:', player);
+
+            if (!player) {
+                console.error('Video player not found');
+                alert('Error: Video player element could not be located.');
+                return;
+            }
+
+            const timestamp = player.currentTime;
+            console.log('Current video timestamp:', timestamp);
+
+            const note = prompt('Enter marker note (optional):');
+            if (note === null) {
+                console.log('User cancelled marker note prompt');
+                return; // User cancelled prompt
+            }
+
+            try {
+                this.status = 'Adding marker...';
+                console.log('Sending marker request to backend...');
+                const response = await fetch(`http://localhost:8000/clips/${this.selectedClip.id}/markers`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timestamp, note })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Backend error: ${response.status} - ${errorText}`);
+                }
+
+                console.log('Marker added successfully');
+                // Refresh markers for the current clip
+                await this.fetchMarkers(this.selectedClip.id);
+                this.status = 'Marker added';
+                setTimeout(() => { this.status = 'Ready'; }, 2000);
+            } catch (error) {
+                console.error('Error adding marker:', error);
+                this.status = 'Failed to add marker';
+                alert(`Error adding marker: ${error.message}`);
+            }
+        },
+
+        async removeMarker(markerId) {
+            console.log('Removing marker:', markerId);
+            if (!this.selectedClip) return;
+            try {
+                const response = await fetch(`http://localhost:8000/clips/${this.selectedClip.id}/markers/${markerId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                console.log('Marker removed successfully');
+                await this.fetchMarkers(this.selectedClip.id);
+            } catch (error) {
+                console.error('Error removing marker:', error);
+                alert(`Failed to remove marker: ${error.message}`);
+            }
+        },
+
+        seekTo(timestamp) {
+            console.log('Seeking to:', timestamp);
+            this.$refs.player.currentTime = timestamp;
+        },
+
+        formatTime(seconds) {
+            const date = new Date(0);
+            date.setSeconds(seconds);
+            return date.toISOString().substr(11, 8);
         },
 
         async fetchSequences() {
@@ -125,7 +233,19 @@ document.addEventListener('alpine:init', () => {
         async fetchClips() {
             try {
                 const response = await fetch('http://localhost:8000/clips');
-                this.clips = await response.json();
+                const newClips = await response.json();
+                this.clips = newClips;
+
+                // Maintain selection if the current clip is still in the list
+                if (this.selectedClip) {
+                    const updatedClip = this.clips.find(c => c.id === this.selectedClip.id);
+                    if (updatedClip) {
+                        this.selectedClip = updatedClip;
+                    } else {
+                        console.log('Selected clip no longer exists in the list.');
+                        this.selectedClip = null;
+                    }
+                }
             } catch (error) {
                 console.error('Error fetching clips:', error);
                 this.status = 'Error fetching clips';
