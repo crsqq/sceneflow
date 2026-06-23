@@ -3,6 +3,7 @@ import logging
 import os
 import glob
 import json
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +16,21 @@ class MediaProcessor:
         """Recursively finds video files and extracts technical metadata."""
         video_extensions = ('.mp4', '.mov', '.mkv', '.avi')
         clips = []
-        
-        for root, dirs, files in os.walk(path):
-            # Skip .sceneflow directories
-            dirs[:] = [d for d in dirs if d != '.sceneflow']
-            
-            for file in files:
-                if file.lower().endswith(video_extensions):
-                    full_path = os.path.join(root, file)
-                    metadata = self._get_metadata(full_path)
-                    if metadata:
-                        clips.append(metadata)
-        return clips
+
+        def _scan_sync():
+            for root, dirs, files in os.walk(path):
+                # Skip .sceneflow directories
+                dirs[:] = [d for d in dirs if d != '.sceneflow']
+
+                for file in files:
+                    if file.lower().endswith(video_extensions):
+                        full_path = os.path.join(root, file)
+                        metadata = self._get_metadata(full_path)
+                        if metadata:
+                            clips.append(metadata)
+            return clips
+
+        return await asyncio.to_thread(_scan_sync)
 
     def _get_metadata(self, file_path: str) -> dict | None:
         """Uses ffprobe to extract metadata."""
@@ -37,7 +41,7 @@ class MediaProcessor:
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
-            
+
             # Find the video stream
             video_stream = next((s for s in data.get('streams', []) if s['codec_type'] == 'video'), None)
             if not video_stream:
@@ -45,7 +49,7 @@ class MediaProcessor:
 
             width = int(video_stream.get('width', 0))
             height = int(video_stream.get('height', 0))
-            
+
             return {
                 "file_path": file_path,
                 "file_name": os.path.basename(file_path),

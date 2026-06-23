@@ -426,6 +426,13 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok) throw new Error(`Server responded with ${response.status}`);
                 const result = await response.json();
                 console.log('Scan result:', result);
+                this.scanning = false;
+                this.scanProgress = 100;
+                this.status = `Scan complete · ${result.new_clips} new · ${result.skipped_clips || 0} skipped`;
+                this.statusType = 'success';
+                this.showToast(`Scan complete · ${result.new_clips} new clips`, 'success');
+                await this.fetchClips();
+                setTimeout(() => { this.status = 'Ready'; this.statusType = 'info'; }, 4000);
             } catch (error) {
                 console.error('Error during scan:', error);
                 this.scanning = false;

@@ -1,3 +1,6 @@
+import os
+import asyncio
+import logging
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -179,6 +182,9 @@ async def scan_directory(request: ScanRequest):
     skipped_clips_count = 0
     total = len(clips_data)
 
+    logger = logging.getLogger(__name__)
+    logger.info(f"Scanning {request.path}: found {total} video file(s)")
+
     for idx, data in enumerate(clips_data):
         await telemetry.broadcast(
             "scan_progress",
@@ -186,26 +192,36 @@ async def scan_directory(request: ScanRequest):
             progress=round((idx + 1) / max(total, 1) * 100, 1)
         )
         # Check if clip already exists to avoid duplicates
-        existing = db_manager.get_session().query(MediaClip).filter(MediaClip.file_path == data['file_path']).first()
-        if not existing:
-            new_clip = MediaClip(
-                file_path=data['file_path'],
-                file_name=data['file_name'],
-                resolution=data['resolution'],
-                frame_rate=data['frame_rate'],
-                orientation=data['orientation'],
-                proxy_path=data['proxy_path'],
-                thumbnail_path=data['thumbnail_path']
-            )
-            db_manager.add_clip(new_clip)
-            new_clips_count += 1
+        with db_manager.get_session() as session:
+            existing = session.query(MediaClip).filter(MediaClip.file_path == data['file_path']).first()
+            if not existing:
+                new_clip = MediaClip(
+                    file_path=data['file_path'],
+                    file_name=data['file_name'],
+                    resolution=data['resolution'],
+                    frame_rate=data['frame_rate'],
+                    orientation=data['orientation'],
+                    proxy_path=data['proxy_path'],
+                    thumbnail_path=data['thumbnail_path']
+                )
+                session.add(new_clip)
+                session.commit()
+                session.refresh(new_clip)
+                new_clips_count += 1
+                clip_id = new_clip.id
+                logger.info(f"Added clip: {data['file_name']} ({data['resolution']})")
+            else:
+                skipped_clips_count += 1
+                clip_id = None
+                logger.info(f"Skipped duplicate: {data['file_name']}")
+
+        if clip_id:
             # Trigger proxy generation in background
-            asyncio.create_task(media_processor.generate_proxy(new_clip.id, new_clip.file_path, db_manager, telemetry))
-        else:
-            skipped_clips_count += 1
+            asyncio.create_task(media_processor.generate_proxy(clip_id, data['file_path'], db_manager, telemetry))
 
     await telemetry.broadcast(
         "scan_complete",
         {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}
     )
+    logger.info(f"Scan complete: {new_clips_count} new, {skipped_clips_count} skipped, {total} total")
     return {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}
