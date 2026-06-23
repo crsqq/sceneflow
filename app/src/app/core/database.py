@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 from sqlalchemy import create_engine, Column, String, Float, Boolean, ForeignKey, DateTime, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.query_parser import ComparisonNode, LogicalNode, InNode
 
 Base = declarative_base()
 
@@ -261,3 +267,133 @@ class DatabaseManager:
                 }
                 results.append(clip_dict)
             return results
+
+    def query_clips(self, query_string: str):
+        """
+        Query clips using a JQL-like query string.
+        
+        Args:
+            query_string: The query string to parse and execute
+            
+        Returns:
+            List of clip dictionaries matching the query, or help text if query is "/help"
+        """
+        from app.core.query_parser import parse_query, ComparisonNode, LogicalNode, InNode
+        
+        # Check for help command
+        if query_string.strip().lower() == '/help':
+            return {"help": parse_query(query_string)}
+        
+        try:
+            # Parse the query
+            ast = parse_query(query_string)
+        except ValueError as e:
+            return {"error": str(e)}
+        
+        with self.get_session() as session:
+            # Build SQLAlchemy query
+            query = session.query(MediaClip)
+            
+            # Apply filters from AST
+            query = self._apply_filters(query, ast, session)
+            
+            # Execute and format results
+            clips = query.all()
+            results = []
+            for clip in clips:
+                clip_dict = {
+                    "id": clip.id,
+                    "file_path": clip.file_path,
+                    "file_name": clip.file_name,
+                    "short_name": clip.short_name,
+                    "resolution": clip.resolution,
+                    "frame_rate": clip.frame_rate,
+                    "orientation": clip.orientation,
+                    "recorded_at": clip.recorded_at.isoformat() if clip.recorded_at else None,
+                    "latitude": clip.latitude,
+                    "longitude": clip.longitude,
+                    "proxy_path": clip.proxy_path,
+                    "thumbnail_path": clip.thumbnail_path,
+                    "is_kept": clip.is_kept,
+                    "is_rejected": clip.is_rejected,
+                    "tags": [{"id": t.id, "tag_type": t.tag_type, "value": t.value} for t in clip.tags]
+                }
+                results.append(clip_dict)
+            return results
+    
+    def _apply_filters(self, query, node, session):
+        """Recursively apply filters from AST nodes to SQLAlchemy query."""
+        from app.core.query_parser import ComparisonNode, LogicalNode, InNode
+        
+        if isinstance(node, ComparisonNode):
+            return self._apply_comparison(query, node)
+        elif isinstance(node, LogicalNode):
+            # Apply left and right filters
+            query = self._apply_filters(query, node.left, session)
+            query = self._apply_filters(query, node.right, session)
+            return query
+        elif isinstance(node, InNode):
+            return self._apply_in(query, node)
+        else:
+            raise ValueError(f"Unknown node type: {type(node)}")
+    
+    def _apply_comparison(self, query, node: ComparisonNode):
+        """Apply a comparison filter to the query."""
+        field = getattr(MediaClip, node.field, None)
+        if field is None:
+            raise ValueError(f"Unknown field: {node.field}")
+        
+        value = node.value
+        
+        # Handle different operators
+        if node.operator == '=':
+            query = query.filter(field == value)
+        elif node.operator == '!=':
+            query = query.filter(field != value)
+        elif node.operator == '>':
+            query = query.filter(field > value)
+        elif node.operator == '<':
+            query = query.filter(field < value)
+        elif node.operator == '>=':
+            query = query.filter(field >= value)
+        elif node.operator == '<=':
+            query = query.filter(field <= value)
+        else:
+            raise ValueError(f"Unknown operator: {node.operator}")
+        
+        return query
+    
+    def _apply_in(self, query, node: InNode):
+        """Apply an IN or NOT IN filter to the query."""
+        if node.field == 'tags':
+            # Special handling for tags field
+            if node.operator == 'IN':
+                # Clips that have at least one of the specified tags
+                from sqlalchemy import or_
+                tag_conditions = []
+                for tag_value in node.values:
+                    tag_conditions.append(
+                        MediaClip.tags.any(Tag.value == tag_value)
+                    )
+                query = query.filter(or_(*tag_conditions))
+            elif node.operator == 'NOT IN':
+                # Clips that don't have any of the specified tags
+                from sqlalchemy import and_, not_
+                tag_conditions = []
+                for tag_value in node.values:
+                    tag_conditions.append(
+                        ~MediaClip.tags.any(Tag.value == tag_value)
+                    )
+                query = query.filter(and_(*tag_conditions))
+        else:
+            # Regular field IN/NOT IN
+            field = getattr(MediaClip, node.field, None)
+            if field is None:
+                raise ValueError(f"Unknown field: {node.field}")
+            
+            if node.operator == 'IN':
+                query = query.filter(field.in_(node.values))
+            elif node.operator == 'NOT IN':
+                query = query.filter(~field.in_(node.values))
+        
+        return query

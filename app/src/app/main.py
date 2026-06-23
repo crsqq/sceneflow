@@ -69,9 +69,14 @@ async def root():
     return {"message": "SceneFlow API is running"}
 
 @app.get("/clips")
-async def get_clips():
+async def get_clips(query: str = None):
     if db_manager is None:
         return []
+    
+    if query:
+        result = db_manager.query_clips(query)
+        return result
+    
     return db_manager.get_all_clips_with_tags()
 
 @app.get("/proxy/{clip_id}")

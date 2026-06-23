@@ -88,6 +88,15 @@
                                 <input type="number" step="any" x-model="selectedClip.longitude" placeholder="—">
                             </label>
                         </div>
+                        <a
+                            x-show="selectedClip && selectedClip.latitude !== null && selectedClip.latitude !== '' && selectedClip.longitude !== null && selectedClip.longitude !== ''"
+                            class="btn-maps"
+                            :href="'https://www.google.com/maps/search/' + selectedClip.latitude + ',' + selectedClip.longitude + '/@' + selectedClip.latitude + ',' + selectedClip.longitude + ',10z'"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            🗺 Open in Google Maps
+                        </a>
                         <button @click="saveSelectedClipMetadata()" class="btn-primary">Save Metadata</button>
                     </div>
                 </div>
@@ -132,34 +141,17 @@
                     </div>
                 </div>
 
-                <!-- Filters -->
+                <!-- Query Filter -->
                 <div class="panel">
-                    <div class="filter-bar">
-                        <button
-                            @click="cullFilter = 'all'"
-                            :class="cullFilter === 'all' ? 'active' : ''"
-                        >All</button>
-                        <button
-                            @click="cullFilter = 'kept'"
-                            :class="cullFilter === 'kept' ? 'active' : ''"
-                        >Kept</button>
-                        <button
-                            @click="cullFilter = 'rejected'"
-                            :class="cullFilter === 'rejected' ? 'active' : ''"
-                        >Rejected</button>
-                        <button
-                            @click="cullFilter = 'unreviewed'"
-                            :class="cullFilter === 'unreviewed' ? 'active' : ''"
-                        >Unreviewed</button>
-                    </div>
-                    <div class="tag-filter" x-show="allTags.length > 0">
-                        <span class="filter-label">Tag:</span>
-                        <select x-model="tagFilter">
-                            <option value="">Any</option>
-                            <template x-for="tag in allTags" :key="tag">
-                                <option :value="tag" x-text="tag"></option>
-                            </template>
-                        </select>
+                    <div class="query-bar">
+                        <input
+                            type="text"
+                            x-model="queryFilter"
+                            @keyup.enter="applyQuery()"
+                            placeholder='e.g. orientation = "vertical" or type /help'
+                        >
+                        <button @click="applyQuery()" class="btn-primary">Filter</button>
+                        <button @click="clearQuery()" class="btn-secondary" x-show="queryFilter">Clear</button>
                     </div>
                     <div class="clip-count" x-text="filteredClips.length + ' clips shown'"></div>
                 </div>
@@ -391,6 +383,17 @@
             </div>
             <div class="modal-actions">
                 <button @click="shortcutHelpOpen = false" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Query Help Modal -->
+    <div class="modal-backdrop" x-show="queryHelpOpen" x-cloak @click="closeQueryHelp()">
+        <div class="modal-card modal-wide" @click.stop>
+            <h3>Query Syntax Help</h3>
+            <pre class="query-help" x-text="queryHelpContent"></pre>
+            <div class="modal-actions">
+                <button @click="closeQueryHelp()" class="btn-secondary">Close</button>
             </div>
         </div>
     </div>

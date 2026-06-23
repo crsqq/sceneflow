@@ -24,8 +24,9 @@ document.addEventListener('alpine:init', () => {
         activeSequenceId: '',
         activeSequenceItems: [],
 
-        cullFilter: 'all',
-        tagFilter: '',
+        queryFilter: '',
+        queryHelpOpen: false,
+        queryHelpContent: '',
         tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'B-Roll', 'Drone', 'Interview', 'Establishing'],
 
         librarySort: 'date',
@@ -429,13 +430,57 @@ document.addEventListener('alpine:init', () => {
         // ───────────────────────────────
 
         get filteredClips() {
-            return this.clips.filter(clip => {
-                if (this.cullFilter === 'kept' && !clip.is_kept) return false;
-                if (this.cullFilter === 'rejected' && !clip.is_rejected) return false;
-                if (this.cullFilter === 'unreviewed' && (clip.is_kept || clip.is_rejected)) return false;
-                if (this.tagFilter && !clip.tags.some(t => t.value === this.tagFilter)) return false;
-                return true;
-            });
+            // If query is active, clips are already filtered from the server
+            return this.clips;
+        },
+
+        async applyQuery() {
+            const query = this.queryFilter.trim();
+            if (!query) {
+                await this.fetchClips();
+                return;
+            }
+
+            try {
+                const url = new URL('http://localhost:8000/clips');
+                url.searchParams.append('query', query);
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.help) {
+                    this.queryHelpContent = result.help;
+                    this.queryHelpOpen = true;
+                    return;
+                }
+
+                if (result.error) {
+                    this.showToast(result.error, 'error');
+                    return;
+                }
+
+                this.clips = result;
+                if (this.selectedClip) {
+                    const updatedClip = this.clips.find(c => c.id === this.selectedClip.id);
+                    if (updatedClip) {
+                        this.selectedClip = updatedClip;
+                    } else {
+                        this.selectedClip = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Error applying query:', error);
+                this.showToast('Query failed', 'error');
+            }
+        },
+
+        async clearQuery() {
+            this.queryFilter = '';
+            await this.fetchClips();
+        },
+
+        closeQueryHelp() {
+            this.queryHelpOpen = false;
+            this.queryHelpContent = '';
         },
 
         get sortedFilteredClips() {

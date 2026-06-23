@@ -254,6 +254,48 @@ body {
     margin-top: 10px;
 }
 
+/* Query Bar */
+.query-bar {
+    display: flex;
+    gap: 8px;
+}
+
+.query-bar input {
+    flex: 1;
+    padding: 8px 10px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-color);
+    font-size: 0.85rem;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.query-bar input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.query-bar button {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+}
+
+.query-help {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 14px;
+    overflow: auto;
+    max-height: 60vh;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--text-color);
+}
+
 .progress-track {
     height: 6px;
     background: var(--bg-color);
@@ -667,6 +709,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     align-self: flex-start;
     padding: 6px 12px;
     font-size: 0.8rem;
+}
+
+.btn-maps {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-color);
+    text-decoration: none;
+    transition: background 0.15s;
+}
+
+.btn-maps:hover {
+    background: var(--surface-hover);
 }
 
 /* Markers Panel */
