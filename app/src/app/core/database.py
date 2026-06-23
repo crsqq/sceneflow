@@ -59,6 +59,14 @@ class DatabaseManager:
         self.engine = create_engine(db_url, connect_args={"check_same_thread": False})
         self.SessionFactory = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
+    @classmethod
+    def for_project_dir(cls, project_dir: str) -> "DatabaseManager":
+        """Create a DatabaseManager whose database lives in <project_dir>/.sceneflow/sceneflow.db."""
+        sceneflow_dir = os.path.join(project_dir, ".sceneflow")
+        os.makedirs(sceneflow_dir, exist_ok=True)
+        db_path = os.path.join(sceneflow_dir, "sceneflow.db")
+        return cls(db_url=f"sqlite:///{db_path}")
+
     def init_db(self):
         """Create all tables."""
         Base.metadata.create_all(bind=self.engine)

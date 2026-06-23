@@ -9,8 +9,12 @@ logger = logging.getLogger(__name__)
 
 class MediaProcessor:
     """Handles FFmpeg command orchestration and monitoring."""
-    def __init__(self):
-        pass
+    def __init__(self, project_dir: str | None = None):
+        self.project_dir = project_dir
+
+    def set_project_dir(self, project_dir: str):
+        """Update the project root used for proxy/thumbnail output."""
+        self.project_dir = project_dir
 
     async def scan_directory(self, path: str) -> list[dict]:
         """Recursively finds video files and extracts technical metadata."""
@@ -73,9 +77,9 @@ class MediaProcessor:
     async def generate_proxy(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
         """Background task using FFmpeg to create low-res proxies and a poster thumbnail."""
         import asyncio
-        # 1. Determine proxy directory: <source_dir>/.sceneflow/proxies/
-        source_dir = os.path.dirname(source_path)
-        sceneflow_dir = os.path.join(source_dir, ".sceneflow")
+        # 1. Determine proxy directory: <project_dir>/.sceneflow/proxies/
+        project_dir = self.project_dir or os.path.dirname(source_path)
+        sceneflow_dir = os.path.join(project_dir, ".sceneflow")
         proxies_dir = os.path.join(sceneflow_dir, "proxies")
         thumbs_dir = os.path.join(sceneflow_dir, "thumbs")
         os.makedirs(proxies_dir, exist_ok=True)

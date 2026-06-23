@@ -35,3 +35,4 @@
 
 ## Known Issues
 - Existing SQLite databases will need schema migration (or deletion) because `clip_markers` gained an `end_timestamp` column and `media_clips` gained `is_rejected` / `thumbnail_path` columns.
+- The SQLite database has moved from the application working directory to `<scan_path>/.sceneflow/sceneflow.db`. Old `sceneflow.db` files in the project root are no longer used.

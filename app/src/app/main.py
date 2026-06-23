@@ -21,9 +21,17 @@ app.add_middleware(
 )
 
 # Global instances for simplicity in MVP
-db_manager = DatabaseManager()
+db_manager: DatabaseManager | None = None
 telemetry = TelemetryServer()
 media_processor = MediaProcessor()
+
+
+def set_project(project_dir: str):
+    """Switch the global database and media processor to the given project root."""
+    global db_manager, media_processor
+    db_manager = DatabaseManager.for_project_dir(project_dir)
+    media_processor.set_project_dir(project_dir)
+    db_manager.init_db()
 
 class ScanRequest(BaseModel):
     path: str
@@ -46,7 +54,8 @@ class ReorderRequest(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
-    db_manager.init_db()
+    # Database is initialized lazily when the first scan/project is opened.
+    pass
 
 @app.get("/")
 async def root():
@@ -54,10 +63,14 @@ async def root():
 
 @app.get("/clips")
 async def get_clips():
+    if db_manager is None:
+        return []
     return db_manager.get_all_clips_with_tags()
 
 @app.get("/proxy/{clip_id}")
 async def get_proxy(clip_id: str):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     with db_manager.get_session() as session:
         from app.core.database import MediaClip
         clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
@@ -67,6 +80,8 @@ async def get_proxy(clip_id: str):
 
 @app.get("/thumbs/{clip_id}")
 async def get_thumbnail(clip_id: str):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     with db_manager.get_session() as session:
         from app.core.database import MediaClip
         clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
@@ -76,40 +91,54 @@ async def get_thumbnail(clip_id: str):
 
 @app.post("/clips/{clip_id}/status")
 async def update_clip_status(clip_id: str, is_kept: bool):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.update_clip_status(clip_id, is_kept=is_kept)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id, "is_kept": is_kept})
     return {"status": "updated"}
 
 @app.post("/clips/{clip_id}/cull")
 async def cull_clip(clip_id: str, request: CullRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.update_clip_status(clip_id, is_kept=request.is_kept, is_rejected=request.is_rejected)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id, "is_kept": request.is_kept, "is_rejected": request.is_rejected})
     return {"status": "updated"}
 
 @app.post("/clips/{clip_id}/tags")
 async def add_tag(clip_id: str, request: TagRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.add_tag(clip_id, request.tag_type, request.value)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "tag_added"}
 
 @app.post("/clips/{clip_id}/markers")
 async def add_marker(clip_id: str, request: MarkerRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.add_marker(clip_id, request.timestamp, request.end_timestamp, request.note)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "marker_added"}
 
 @app.get("/clips/{clip_id}/markers")
 async def get_markers(clip_id: str):
+    if db_manager is None:
+        return []
     return db_manager.get_markers(clip_id)
 
 @app.delete("/clips/{clip_id}/markers/{marker_id}")
 async def remove_marker(clip_id: str, marker_id: str):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.remove_marker(marker_id)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "marker_removed"}
 
 @app.delete("/clips/{clip_id}/tags/{tag_id}")
 async def remove_tag(clip_id: str, tag_id: str):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.remove_tag(tag_id)
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "tag_removed"}
@@ -137,38 +166,52 @@ class SequenceItemRequest(BaseModel):
 
 @app.post("/sequences")
 async def create_sequence(request: SequenceRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     sequence = db_manager.create_sequence(request.name)
     return sequence
 
 @app.post("/sequences/{sequence_id}/items")
 async def add_sequence_item(sequence_id: str, request: SequenceItemRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     item = db_manager.add_sequence_item(sequence_id, request.clip_id, request.position, request.notes)
     return item
 
 @app.get("/sequences/{sequence_id}/items")
 async def get_sequence_items(sequence_id: str):
+    if db_manager is None:
+        return []
     return db_manager.get_sequence_items_with_clips(sequence_id)
 
 @app.delete("/sequences/{sequence_id}/items/{item_id}")
 async def remove_sequence_item(sequence_id: str, item_id: str):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.remove_sequence_item(item_id)
     await telemetry.broadcast("sequence_updated", {"sequence_id": sequence_id})
     return {"status": "item_removed"}
 
 @app.post("/sequences/{sequence_id}/reorder")
 async def reorder_sequence_items(sequence_id: str, request: ReorderRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     db_manager.reorder_sequence_items(sequence_id, request.item_ids)
     await telemetry.broadcast("sequence_updated", {"sequence_id": sequence_id})
     return {"status": "reordered"}
 
 @app.get("/sequences")
 async def get_sequences():
+    if db_manager is None:
+        return []
     with db_manager.get_session() as session:
         from app.core.database import Sequence
         return session.query(Sequence).all()
 
 @app.get("/sequences/{sequence_id}/export")
 async def export_sequence(sequence_id: str):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
     exporter = StoryboardExporter(db_manager)
     markdown = exporter.export_markdown_storyboard(sequence_id)
     from fastapi.responses import PlainTextResponse
@@ -176,6 +219,8 @@ async def export_sequence(sequence_id: str):
 
 @app.post("/scan")
 async def scan_directory(request: ScanRequest):
+    project_dir = request.path
+    set_project(project_dir)
     await telemetry.broadcast("scan_started", {"path": request.path})
     clips_data = await media_processor.scan_directory(request.path)
     new_clips_count = 0
