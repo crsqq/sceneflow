@@ -20,6 +20,13 @@
             </div>
         </header>
 
+        <div class="proxy-progress-bar" x-show="proxyQueueActive" x-cloak>
+            <div class="progress-track">
+                <div class="progress-fill" :style="'width: ' + proxyQueuePercent + '%'"></div>
+            </div>
+            <span class="progress-text" x-text="'Previews: ' + proxyQueueProcessed + ' / ' + proxyQueueTotal + ' processed' + (proxyQueueFailed ? ' · ' + proxyQueueFailed + ' failed' : '')"></span>
+        </div>
+
         <main class="app-main">
             <!-- Left: Preview -->
             <section class="preview-section" x-show="selectedClip" x-cloak>
@@ -57,6 +64,31 @@
                         <button @click="cullSelected('keep')" :class="selectedClip && selectedClip.is_kept ? 'btn-keep active' : 'btn-keep'" title="Keep (K)">✓ Keep</button>
                         <button @click="cullSelected('reject')" :class="selectedClip && selectedClip.is_rejected ? 'btn-reject active' : 'btn-reject'" title="Reject (X)">✕ Reject</button>
                         <button @click="cullSelected('clear')" class="btn-secondary" title="Clear rating (U)">Unrated</button>
+                    </div>
+                </div>
+
+                <div class="metadata-panel" x-show="selectedClip">
+                    <h4>Clip Metadata</h4>
+                    <div class="metadata-fields">
+                        <label>
+                            <span>Short Name</span>
+                            <input type="text" x-model="selectedClip.short_name" placeholder="e.g. Drone opening">
+                        </label>
+                        <label>
+                            <span>Recorded At</span>
+                            <input type="datetime-local" x-model="selectedClip.recorded_at">
+                        </label>
+                        <div class="metadata-row">
+                            <label>
+                                <span>Latitude</span>
+                                <input type="number" step="any" x-model="selectedClip.latitude" placeholder="—">
+                            </label>
+                            <label>
+                                <span>Longitude</span>
+                                <input type="number" step="any" x-model="selectedClip.longitude" placeholder="—">
+                            </label>
+                        </div>
+                        <button @click="saveSelectedClipMetadata()" class="btn-primary">Save Metadata</button>
                     </div>
                 </div>
 
@@ -151,9 +183,21 @@
 
                 <!-- Clip Library -->
                 <div class="panel clip-library">
-                    <h3>Library</h3>
+                    <div class="library-header">
+                        <h3>Library</h3>
+                        <div class="sort-bar">
+                            <select x-model="librarySort" title="Sort by">
+                                <option value="date">Date</option>
+                                <option value="filename">Filename</option>
+                                <option value="shortname">Short Name</option>
+                            </select>
+                            <button @click="librarySortDir = librarySortDir === 'asc' ? 'desc' : 'asc'" :title="librarySortDir === 'asc' ? 'Ascending' : 'Descending'">
+                                <span x-text="librarySortDir === 'asc' ? '↑' : '↓'"></span>
+                            </button>
+                        </div>
+                    </div>
                     <ul class="clip-list">
-                        <template x-for="clip in filteredClips" :key="clip.id">
+                        <template x-for="clip in sortedFilteredClips" :key="clip.id">
                             <li
                                 @click="selectClip(clip)"
                                 draggable="true"
@@ -178,8 +222,12 @@
                                 </div>
                                 <div class="clip-main">
                                     <div class="clip-info">
-                                        <span class="file-name" x-text="clip.file_name"></span>
+                                        <span class="file-name" x-text="clip.short_name || clip.file_name"></span>
                                         <span class="resolution" x-text="clip.resolution"></span>
+                                    </div>
+                                    <div class="clip-meta" x-show="clip.recorded_at || clip.latitude !== null">
+                                        <span x-show="clip.recorded_at" x-text="formatRecordedAt(clip.recorded_at)"></span>
+                                        <span x-show="clip.latitude !== null && clip.longitude !== null" x-text="formatGps(clip.latitude) + ', ' + formatGps(clip.longitude)"></span>
                                     </div>
                                     <div class="clip-tags" x-show="clip.tags && clip.tags.length > 0">
                                         <template x-for="tag in clip.tags" :key="tag.id">

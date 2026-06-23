@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -48,6 +49,12 @@ class MarkerRequest(BaseModel):
 class CullRequest(BaseModel):
     is_kept: bool | None = None
     is_rejected: bool | None = None
+
+class ClipMetadataRequest(BaseModel):
+    short_name: str | None = None
+    recorded_at: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 class ReorderRequest(BaseModel):
     item_ids: list[str]
@@ -143,6 +150,28 @@ async def remove_tag(clip_id: str, tag_id: str):
     await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
     return {"status": "tag_removed"}
 
+@app.post("/clips/{clip_id}/metadata")
+async def update_clip_metadata(clip_id: str, request: ClipMetadataRequest):
+    if db_manager is None:
+        raise HTTPException(status_code=503, detail="No project opened")
+
+    recorded_at = None
+    if request.recorded_at:
+        try:
+            recorded_at = datetime.fromisoformat(request.recorded_at)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid recorded_at format")
+
+    db_manager.update_clip_metadata(
+        clip_id,
+        short_name=request.short_name,
+        recorded_at=recorded_at,
+        latitude=request.latitude,
+        longitude=request.longitude
+    )
+    await telemetry.broadcast("clip_updated", {"clip_id": clip_id})
+    return {"status": "metadata_updated"}
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await telemetry.connect(websocket)
@@ -230,6 +259,8 @@ async def scan_directory(request: ScanRequest):
     logger = logging.getLogger(__name__)
     logger.info(f"Scanning {request.path}: found {total} video file(s)")
 
+    proxy_jobs: list[tuple[str, str]] = []
+
     for idx, data in enumerate(clips_data):
         await telemetry.broadcast(
             "scan_progress",
@@ -243,9 +274,13 @@ async def scan_directory(request: ScanRequest):
                 new_clip = MediaClip(
                     file_path=data['file_path'],
                     file_name=data['file_name'],
+                    short_name=data.get('short_name'),
                     resolution=data['resolution'],
                     frame_rate=data['frame_rate'],
                     orientation=data['orientation'],
+                    recorded_at=data.get('recorded_at'),
+                    latitude=data.get('latitude'),
+                    longitude=data.get('longitude'),
                     proxy_path=data['proxy_path'],
                     thumbnail_path=data['thumbnail_path']
                 )
@@ -261,12 +296,16 @@ async def scan_directory(request: ScanRequest):
                 logger.info(f"Skipped duplicate: {data['file_name']}")
 
         if clip_id:
-            # Trigger proxy generation in background
-            asyncio.create_task(media_processor.generate_proxy(clip_id, data['file_path'], db_manager, telemetry))
+            proxy_jobs.append((clip_id, data['file_path']))
 
     await telemetry.broadcast(
         "scan_complete",
         {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}
     )
     logger.info(f"Scan complete: {new_clips_count} new, {skipped_clips_count} skipped, {total} total")
+
+    # Start proxy generation with bounded concurrency in the background
+    if proxy_jobs:
+        asyncio.create_task(media_processor.process_proxy_queue(proxy_jobs, db_manager, telemetry))
+
     return {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}

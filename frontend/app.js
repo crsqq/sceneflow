@@ -13,6 +13,10 @@ document.addEventListener('alpine:init', () => {
         pendingMarkerStart: null,
 
         proxyStatuses: {},
+        proxyQueueActive: false,
+        proxyQueueTotal: 0,
+        proxyQueueProcessed: 0,
+        proxyQueueFailed: 0,
         showTagInput: null,
         newTagName: '',
 
@@ -23,6 +27,9 @@ document.addEventListener('alpine:init', () => {
         cullFilter: 'all',
         tagFilter: '',
         tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'B-Roll', 'Drone', 'Interview', 'Establishing'],
+
+        librarySort: 'date',
+        librarySortDir: 'asc',
 
         focusMode: false,
         shortcutHelpOpen: false,
@@ -95,6 +102,29 @@ document.addEventListener('alpine:init', () => {
                 this.fetchClips();
             } else if (msg.event === 'proxy_failed') {
                 this.proxyStatuses[msg.data.clip_id] = 'failed';
+            } else if (msg.event === 'proxy_queue_started') {
+                this.proxyQueueActive = true;
+                this.proxyQueueTotal = msg.data.total || 0;
+                this.proxyQueueProcessed = 0;
+                this.proxyQueueFailed = 0;
+                this.status = `Generating previews · 0 / ${this.proxyQueueTotal}`;
+                this.statusType = 'info';
+            } else if (msg.event === 'proxy_queue_progress') {
+                this.proxyQueueActive = true;
+                this.proxyQueueTotal = msg.data.total || 0;
+                this.proxyQueueProcessed = msg.data.processed || 0;
+                this.proxyQueueFailed = msg.data.failed || 0;
+                this.status = `Generating previews · ${this.proxyQueueProcessed} / ${this.proxyQueueTotal}`;
+                this.statusType = 'info';
+            } else if (msg.event === 'proxy_queue_complete') {
+                this.proxyQueueActive = false;
+                const failed = msg.data.failed || 0;
+                const total = msg.data.total || 0;
+                const completed = msg.data.completed || 0;
+                this.status = `Previews complete · ${completed} / ${total}${failed ? ` · ${failed} failed` : ''}`;
+                this.statusType = failed ? 'error' : 'success';
+                this.showToast(`Previews complete · ${completed} / ${total}${failed ? ` · ${failed} failed` : ''}`, failed ? 'error' : 'success');
+                setTimeout(() => { this.status = 'Ready'; this.statusType = 'info'; }, 4000);
             }
         },
 
@@ -121,20 +151,20 @@ document.addEventListener('alpine:init', () => {
         },
 
         get selectedClipIndex() {
-            return this.filteredClips.findIndex(c => c.id === (this.selectedClip && this.selectedClip.id));
+            return this.sortedFilteredClips.findIndex(c => c.id === (this.selectedClip && this.selectedClip.id));
         },
 
         async selectNextClip() {
             const idx = this.selectedClipIndex;
-            if (idx >= 0 && idx < this.filteredClips.length - 1) {
-                await this.selectClip(this.filteredClips[idx + 1]);
+            if (idx >= 0 && idx < this.sortedFilteredClips.length - 1) {
+                await this.selectClip(this.sortedFilteredClips[idx + 1]);
             }
         },
 
         async selectPreviousClip() {
             const idx = this.selectedClipIndex;
             if (idx > 0) {
-                await this.selectClip(this.filteredClips[idx - 1]);
+                await this.selectClip(this.sortedFilteredClips[idx - 1]);
             }
         },
 
@@ -328,6 +358,11 @@ document.addEventListener('alpine:init', () => {
             return true;
         },
 
+        get proxyQueuePercent() {
+            if (!this.proxyQueueTotal) return 0;
+            return Math.round((this.proxyQueueProcessed / this.proxyQueueTotal) * 100);
+        },
+
         // ───────────────────────────────
         // Tags
         // ───────────────────────────────
@@ -401,6 +436,72 @@ document.addEventListener('alpine:init', () => {
                 if (this.tagFilter && !clip.tags.some(t => t.value === this.tagFilter)) return false;
                 return true;
             });
+        },
+
+        get sortedFilteredClips() {
+            const clips = [...this.filteredClips];
+            const dir = this.librarySortDir === 'asc' ? 1 : -1;
+            clips.sort((a, b) => {
+                if (this.librarySort === 'filename') {
+                    return a.file_name.localeCompare(b.file_name) * dir;
+                }
+                if (this.librarySort === 'shortname') {
+                    const aName = (a.short_name || a.file_name || '').toLowerCase();
+                    const bName = (b.short_name || b.file_name || '').toLowerCase();
+                    return aName.localeCompare(bName) * dir;
+                }
+                if (this.librarySort === 'date') {
+                    const aDate = a.recorded_at ? new Date(a.recorded_at).getTime() : Infinity;
+                    const bDate = b.recorded_at ? new Date(b.recorded_at).getTime() : Infinity;
+                    if (aDate === bDate) return 0;
+                    return (aDate - bDate) * dir;
+                }
+                return 0;
+            });
+            return clips;
+        },
+
+        formatRecordedAt(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return iso;
+            return d.toLocaleString();
+        },
+
+        formatGps(value) {
+            if (value === null || value === undefined || value === '') return null;
+            const num = parseFloat(value);
+            return isNaN(num) ? null : num.toFixed(4);
+        },
+
+        async updateClipMetadata(clipId, payload) {
+            if (!clipId) return;
+            try {
+                this.status = 'Saving metadata…';
+                const response = await fetch(`http://localhost:8000/clips/${clipId}/metadata`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error('Failed to update metadata');
+                this.status = 'Ready';
+            } catch (error) {
+                console.error('Error updating metadata:', error);
+                this.showToast('Failed to save metadata', 'error');
+                this.status = 'Ready';
+                await this.fetchClips();
+            }
+        },
+
+        async saveSelectedClipMetadata() {
+            if (!this.selectedClip) return;
+            const payload = {
+                short_name: this.selectedClip.short_name || null,
+                recorded_at: this.selectedClip.recorded_at || null,
+                latitude: this.selectedClip.latitude !== '' && this.selectedClip.latitude !== null ? parseFloat(this.selectedClip.latitude) : null,
+                longitude: this.selectedClip.longitude !== '' && this.selectedClip.longitude !== null ? parseFloat(this.selectedClip.longitude) : null
+            };
+            await this.updateClipMetadata(this.selectedClip.id, payload);
         },
 
         // ───────────────────────────────

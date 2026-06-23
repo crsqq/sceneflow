@@ -11,9 +11,13 @@ class MediaClip(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     file_path = Column(String, unique=True, nullable=False)
     file_name = Column(String, nullable=False)
+    short_name = Column(String, nullable=True)
     resolution = Column(String)
     frame_rate = Column(Float)
     orientation = Column(String)  # 'horizontal' | 'vertical'
+    recorded_at = Column(DateTime, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     proxy_path = Column(String)
     thumbnail_path = Column(String)
     is_kept = Column(Boolean, default=False)
@@ -96,6 +100,20 @@ class DatabaseManager:
                     clip.is_rejected = is_rejected
                 session.commit()
 
+    def update_clip_metadata(self, clip_id: str, short_name: str | None = None, recorded_at: datetime | None = None, latitude: float | None = None, longitude: float | None = None):
+        with self.get_session() as session:
+            clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
+            if clip:
+                if short_name is not None:
+                    clip.short_name = short_name
+                if recorded_at is not None:
+                    clip.recorded_at = recorded_at
+                if latitude is not None:
+                    clip.latitude = latitude
+                if longitude is not None:
+                    clip.longitude = longitude
+                session.commit()
+
     def create_sequence(self, name: str) -> Sequence:
         with self.get_session() as session:
             sequence = Sequence(name=name)
@@ -165,9 +183,13 @@ class DatabaseManager:
                         "id": clip.id,
                         "file_path": clip.file_path,
                         "file_name": clip.file_name,
+                        "short_name": clip.short_name,
                         "resolution": clip.resolution,
                         "frame_rate": clip.frame_rate,
                         "orientation": clip.orientation,
+                        "recorded_at": clip.recorded_at.isoformat() if clip.recorded_at else None,
+                        "latitude": clip.latitude,
+                        "longitude": clip.longitude,
                         "proxy_path": clip.proxy_path,
                         "thumbnail_path": clip.thumbnail_path,
                         "is_kept": clip.is_kept,
@@ -224,9 +246,13 @@ class DatabaseManager:
                     "id": clip.id,
                     "file_path": clip.file_path,
                     "file_name": clip.file_name,
+                    "short_name": clip.short_name,
                     "resolution": clip.resolution,
                     "frame_rate": clip.frame_rate,
                     "orientation": clip.orientation,
+                    "recorded_at": clip.recorded_at.isoformat() if clip.recorded_at else None,
+                    "latitude": clip.latitude,
+                    "longitude": clip.longitude,
                     "proxy_path": clip.proxy_path,
                     "thumbnail_path": clip.thumbnail_path,
                     "is_kept": clip.is_kept,

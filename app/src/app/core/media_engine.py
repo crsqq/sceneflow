@@ -4,17 +4,43 @@ import os
 import glob
 import json
 import asyncio
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_PROXY_CONCURRENCY = 3
+
 class MediaProcessor:
     """Handles FFmpeg command orchestration and monitoring."""
-    def __init__(self, project_dir: str | None = None):
+    def __init__(self, project_dir: str | None = None, max_concurrent_proxies: int | None = None):
         self.project_dir = project_dir
+        if max_concurrent_proxies is None:
+            try:
+                max_concurrent_proxies = int(os.environ.get("SCENEFLOW_PROXY_CONCURRENCY", DEFAULT_PROXY_CONCURRENCY))
+            except ValueError:
+                max_concurrent_proxies = DEFAULT_PROXY_CONCURRENCY
+        self.proxy_semaphore = asyncio.Semaphore(max(1, max_concurrent_proxies))
+        self._queue_lock = asyncio.Lock()
+        self._queued = 0
+        self._completed = 0
+        self._failed = 0
 
     def set_project_dir(self, project_dir: str):
         """Update the project root used for proxy/thumbnail output."""
         self.project_dir = project_dir
+
+    async def _reset_queue_counters(self, total: int):
+        async with self._queue_lock:
+            self._queued = total
+            self._completed = 0
+            self._failed = 0
+
+    async def _mark_done(self, failed: bool = False):
+        async with self._queue_lock:
+            self._completed += 1
+            if failed:
+                self._failed += 1
+            return self._completed, self._queued, self._failed
 
     async def scan_directory(self, path: str) -> list[dict]:
         """Recursively finds video files and extracts technical metadata."""
@@ -54,12 +80,17 @@ class MediaProcessor:
             width = int(video_stream.get('width', 0))
             height = int(video_stream.get('height', 0))
 
+            exif = self._get_exif_metadata(file_path)
+
             return {
                 "file_path": file_path,
                 "file_name": os.path.basename(file_path),
                 "resolution": f"{width}x{height}",
                 "frame_rate": self._parse_fps(video_stream.get('avg_frame_rate', '0/0')),
                 "orientation": "vertical" if height > width else "horizontal",
+                "recorded_at": exif.get("recorded_at"),
+                "latitude": exif.get("latitude"),
+                "longitude": exif.get("longitude"),
                 "proxy_path": "", # To be filled later
                 "thumbnail_path": "" # To be filled later
             }
@@ -74,9 +105,49 @@ class MediaProcessor:
         except (ValueError, ZeroDivisionError):
             return 0.0
 
+    def _get_exif_metadata(self, file_path: str) -> dict:
+        """Uses exiftool to extract CreateDate and GPS coordinates.
+
+        Returns a dict with keys recorded_at (datetime or None), latitude (float or None),
+        longitude (float or None). If exiftool returns no value for a field, it is None.
+        """
+        result = {"recorded_at": None, "latitude": None, "longitude": None}
+        try:
+            cmd = [
+                'exiftool', '-time:CreateDate', '-GPSLatitude', '-GPSLongitude',
+                '-n', '-j', file_path
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(proc.stdout)
+            if not data:
+                return result
+            entry = data[0]
+
+            create_date = entry.get('CreateDate')
+            if create_date:
+                try:
+                    result['recorded_at'] = datetime.strptime(create_date, '%Y:%m:%d %H:%M:%S')
+                except ValueError:
+                    logger.warning(f"Could not parse CreateDate '{create_date}' for {file_path}")
+
+            lat = entry.get('GPSLatitude')
+            lon = entry.get('GPSLongitude')
+            if lat is not None:
+                result['latitude'] = float(lat)
+            if lon is not None:
+                result['longitude'] = float(lon)
+        except Exception as e:
+            logger.error(f"Error extracting exif metadata for {file_path}: {e}")
+        return result
+
     async def generate_proxy(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
         """Background task using FFmpeg to create low-res proxies and a poster thumbnail."""
         import asyncio
+        async with self.proxy_semaphore:
+            await self._generate_proxy_inner(clip_id, source_path, db_manager, telemetry)
+
+    async def _generate_proxy_inner(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
+        """Actual proxy/thumbnail generation, guarded by the concurrency semaphore."""
         # 1. Determine proxy directory: <project_dir>/.sceneflow/proxies/
         project_dir = self.project_dir or os.path.dirname(source_path)
         sceneflow_dir = os.path.join(project_dir, ".sceneflow")
@@ -157,3 +228,51 @@ class MediaProcessor:
         except Exception as e:
             logger.error(f"Failed to generate proxy for {source_path}: {e}")
             await telemetry.broadcast("proxy_failed", {"clip_id": clip_id, "error": str(e)})
+            raise
+
+    async def process_proxy_queue(self, jobs: list[tuple[str, str]], db_manager, telemetry) -> None:
+        """Process a batch of proxy jobs with bounded concurrency and broadcast queue progress."""
+        if not jobs:
+            return
+
+        await self._reset_queue_counters(len(jobs))
+        file_name_map = {clip_id: os.path.basename(path) for clip_id, path in jobs}
+
+        await telemetry.broadcast(
+            "proxy_queue_started",
+            {"total": len(jobs)}
+        )
+
+        async def _run_one(clip_id: str, source_path: str):
+            try:
+                await self.generate_proxy(clip_id, source_path, db_manager, telemetry)
+                completed, total, failed = await self._mark_done(failed=False)
+                await telemetry.broadcast(
+                    "proxy_queue_progress",
+                    {
+                        "processed": completed,
+                        "total": total,
+                        "failed": failed,
+                        "current_file": file_name_map.get(clip_id, ""),
+                    },
+                    progress=round(completed / max(total, 1) * 100, 1)
+                )
+            except Exception:
+                completed, total, failed = await self._mark_done(failed=True)
+                await telemetry.broadcast(
+                    "proxy_queue_progress",
+                    {
+                        "processed": completed,
+                        "total": total,
+                        "failed": failed,
+                        "current_file": file_name_map.get(clip_id, ""),
+                    },
+                    progress=round(completed / max(total, 1) * 100, 1)
+                )
+
+        await asyncio.gather(*(_run_one(clip_id, path) for clip_id, path in jobs))
+
+        await telemetry.broadcast(
+            "proxy_queue_complete",
+            {"total": len(jobs), "completed": self._completed, "failed": self._failed}
+        )
