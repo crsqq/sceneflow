@@ -45,6 +45,7 @@
 
                 <div class="player-toolbar">
                     <div class="player-actions">
+                        <button @click="closePreview()" class="btn-secondary" title="Close preview (Esc)">× Close</button>
                         <button @click="setMarkerStart()" :class="pendingMarkerStart !== null ? 'btn-active' : ''">
                             <span x-text="pendingMarkerStart !== null ? 'Start: ' + formatTime(pendingMarkerStart) : 'Set Start'"></span>
                         </button>
@@ -329,7 +330,7 @@
             <div class="shortcut-grid">
                 <div><kbd>Space</kbd> Play / Pause</div>
                 <div><kbd>J</kbd> / <kbd>L</kbd> Shuttle reverse / forward</div>
-                <div><kbd>K</kbd> Pause</div>
+                <div><kbd>P</kbd> Pause shuttle</div>
                 <div><kbd>←</kbd> / <kbd>→</kbd> Step -1s / +1s</div>
                 <div><kbd>↑</kbd> / <kbd>↓</kbd> Previous / Next clip</div>
                 <div><kbd>K</kbd> Keep selected clip</div>
@@ -337,6 +338,7 @@
                 <div><kbd>U</kbd> Clear rating</div>
                 <div><kbd>1</kbd>–<kbd>9</kbd> Apply tag from palette</div>
                 <div><kbd>F</kbd> Toggle focus mode</div>
+                <div><kbd>Esc</kbd> Close preview</div>
                 <div><kbd>?</kbd> Show this help</div>
             </div>
             <div class="modal-actions">

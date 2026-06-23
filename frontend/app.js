@@ -685,7 +685,7 @@ document.addEventListener('alpine:init', () => {
                 this.shuttle(1);
                 return;
             }
-            if (key === 'k' || key === 'K') {
+            if (key === 'p' || key === 'P') {
                 event.preventDefault();
                 this.stopShuttle();
                 return;
@@ -717,6 +717,13 @@ document.addEventListener('alpine:init', () => {
             if (key === 'k' || key === 'K') {
                 event.preventDefault();
                 this.cullSelected('keep');
+                return;
+            }
+
+            // Close preview
+            if (key === 'Escape') {
+                event.preventDefault();
+                this.closePreview();
                 return;
             }
             if (key === 'x' || key === 'X') {
@@ -809,6 +816,12 @@ document.addEventListener('alpine:init', () => {
 
         toggleFocusMode() {
             this.focusMode = !this.focusMode;
+        },
+
+        closePreview() {
+            this.selectedClip = null;
+            this.markers = [];
+            this.pendingMarkerStart = null;
         },
 
         openShortcutHelp() {
