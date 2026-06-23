@@ -299,6 +299,18 @@
         </div>
     </div>
 
+    <!-- Sequence Name Modal -->
+    <div class="modal-backdrop" x-show="sequenceNameModalOpen" x-cloak @click="closeSequenceNameModal()">
+        <div class="modal-card" @click.stop>
+            <h3>New Sequence</h3>
+            <input type="text" x-model="sequenceNameDraft" placeholder="Sequence name" @keyup.enter="submitSequenceName()">
+            <div class="modal-actions">
+                <button @click="submitSequenceName()" class="btn-primary">Create</button>
+                <button @click="closeSequenceNameModal()" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Markdown Preview Modal -->
     <div class="modal-backdrop" x-show="markdownPreviewOpen" x-cloak @click="closeMarkdownPreview()">
         <div class="modal-card modal-wide" @click.stop>

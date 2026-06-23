@@ -32,6 +32,10 @@ document.addEventListener('alpine:init', () => {
         markerNoteDraft: '',
         markerNoteResolve: null,
 
+        sequenceNameModalOpen: false,
+        sequenceNameDraft: '',
+        sequenceNameResolve: null,
+
         markdownPreviewOpen: false,
         markdownPreviewContent: '',
 
@@ -475,8 +479,31 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        openSequenceNameModal() {
+            this.sequenceNameDraft = '';
+            this.sequenceNameModalOpen = true;
+            return new Promise((resolve) => { this.sequenceNameResolve = resolve; });
+        },
+
+        submitSequenceName() {
+            if (this.sequenceNameResolve) {
+                const name = this.sequenceNameDraft.trim();
+                this.sequenceNameResolve(name || null);
+                this.sequenceNameResolve = null;
+            }
+            this.sequenceNameModalOpen = false;
+        },
+
+        closeSequenceNameModal() {
+            if (this.sequenceNameResolve) {
+                this.sequenceNameResolve(null);
+                this.sequenceNameResolve = null;
+            }
+            this.sequenceNameModalOpen = false;
+        },
+
         async createSequence() {
-            const name = prompt('Sequence name:');
+            const name = await this.openSequenceNameModal();
             if (!name) return;
             try {
                 const response = await fetch('http://localhost:8000/sequences', {
@@ -643,7 +670,7 @@ document.addEventListener('alpine:init', () => {
         handleGlobalKey(event) {
             // Ignore when typing in inputs/textareas
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
-            if (this.markerNoteModalOpen || this.markdownPreviewOpen || this.shortcutHelpOpen) return;
+            if (this.markerNoteModalOpen || this.sequenceNameModalOpen || this.markdownPreviewOpen || this.shortcutHelpOpen) return;
 
             const key = event.key;
 
