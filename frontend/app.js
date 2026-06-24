@@ -625,6 +625,7 @@ document.addEventListener('alpine:init', () => {
                 this.statusType = 'success';
                 this.showToast(`Scan complete · ${result.new_clips} new clips`, 'success');
                 await this.fetchClips();
+                await this.fetchSequences();
                 setTimeout(() => { this.status = 'Ready'; this.statusType = 'info'; }, 4000);
             } catch (error) {
                 console.error('Error during scan:', error);
@@ -661,6 +662,10 @@ document.addEventListener('alpine:init', () => {
             try {
                 const response = await fetch('http://localhost:8000/sequences');
                 this.sequences = await response.json();
+                if (!this.activeSequenceId && this.sequences.length > 0) {
+                    this.activeSequenceId = this.sequences[0].id;
+                    await this.loadActiveSequence();
+                }
             } catch (error) {
                 console.error('Error fetching sequences:', error);
             }
