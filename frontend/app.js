@@ -900,6 +900,15 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
 
+            // Add selected clip to blueprint
+            if (key === 'a' || key === 'A') {
+                event.preventDefault();
+                if (this.selectedClip) {
+                    this.addClipToSequence(this.selectedClip.id);
+                }
+                return;
+            }
+
             // Help
             if (key === '?') {
                 event.preventDefault();

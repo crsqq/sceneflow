@@ -65,6 +65,14 @@
                         <button @click="cullSelected('reject')" :class="selectedClip && selectedClip.is_rejected ? 'btn-reject active' : 'btn-reject'" title="Reject (X)">✕ Reject</button>
                         <button @click="cullSelected('clear')" class="btn-secondary" title="Clear rating (U)">Unrated</button>
                     </div>
+                    <div class="blueprint-actions-bar">
+                        <button
+                            @click="selectedClip && addClipToSequence(selectedClip.id)"
+                            :disabled="!selectedClip || !activeSequenceId"
+                            class="btn-secondary"
+                            title="Add selected clip to blueprint (A)"
+                        >+ Blueprint</button>
+                    </div>
                 </div>
 
                 <div class="metadata-panel" x-show="selectedClip">
@@ -285,7 +293,7 @@
                         <template x-if="activeSequenceItems.length === 0">
                             <p class="empty-hint">Drag clips here to build your sequence.</p>
                         </template>
-                        <ul class="blueprint-list" x-sort="reorderBlueprint">
+                        <ul class="blueprint-list">
                             <template x-for="item in activeSequenceItems" :key="item.id">
                                 <li
                                     draggable="true"
@@ -299,7 +307,7 @@
                                     </div>
                                     <div class="bp-info">
                                         <span class="bp-position" x-text="item.position + 1"></span>
-                                        <span class="bp-name" x-text="item.clip ? item.clip.file_name : '[Missing]'"></span>
+                                        <span class="bp-name" x-text="item.clip ? (item.clip.short_name || item.clip.file_name) : '[Missing]'"></span>
                                         <span class="bp-tags" x-show="item.clip && item.clip.tags.length > 0">
                                             <template x-for="tag in item.clip.tags" :key="tag.id">
                                                 <span class="tag-pill creative" x-text="tag.value"></span>
@@ -379,6 +387,7 @@
                 <div><kbd>1</kbd>–<kbd>9</kbd> Apply tag from palette</div>
                 <div><kbd>F</kbd> Toggle focus mode</div>
                 <div><kbd>Esc</kbd> Close preview</div>
+                <div><kbd>A</kbd> Add selected clip to blueprint</div>
                 <div><kbd>?</kbd> Show this help</div>
             </div>
             <div class="modal-actions">
