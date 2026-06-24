@@ -1,4 +1,3 @@
-import os
 from app.core.database import DatabaseManager
 
 class StoryboardExporter:
@@ -22,8 +21,8 @@ class StoryboardExporter:
 
             md = f"# Storyboard: {sequence.name}\n\n"
             md += f"*Created at: {sequence.created_at.strftime('%Y-%m-%d %H:%M')}*\n\n"
-            md += "| Position | File Name | Orientation | Resolution | Section | Note |\n"
-            md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+            md += "| Position | File Name | Short Name | Orientation | Resolution | Section | Note |\n"
+            md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
 
             items = session.query(SequenceItem).filter(SequenceItem.sequence_id == sequence_id).order_by(SequenceItem.position).all()
 
@@ -40,7 +39,7 @@ class StoryboardExporter:
             for item in items:
                 clip = session.query(MediaClip).filter(MediaClip.id == item.clip_id).first()
                 if not clip:
-                    md += f"| {item.position} | [Missing Clip] | - | - | - | - |\n"
+                    md += f"| {item.position} | [Missing Clip] | | - | - | - | - |\n"
                     continue
 
                 markers = (
@@ -50,15 +49,16 @@ class StoryboardExporter:
                     .all()
                 )
 
+                short_name = clip.short_name or ""
                 if markers:
                     for marker in markers:
                         section = _format_section(marker.timestamp, marker.end_timestamp)
                         note = marker.note or item.notes or ""
-                        md += f"| {item.position} | {clip.file_name} | {clip.orientation or '-'} | {clip.resolution or '-'} | {section} | {note} |\n"
+                        md += f"| {item.position} | {clip.file_name} | {short_name} | {clip.orientation or '-'} | {clip.resolution or '-'} | {section} | {note} |\n"
                 else:
                     section = "full clip"
                     note = item.notes or ""
-                    md += f"| {item.position} | {clip.file_name} | {clip.orientation or '-'} | {clip.resolution or '-'} | {section} | {note} |\n"
+                    md += f"| {item.position} | {clip.file_name} | {short_name} | {clip.orientation or '-'} | {clip.resolution or '-'} | {section} | {note} |\n"
 
             return md
 
