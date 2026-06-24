@@ -48,7 +48,7 @@ document.addEventListener('alpine:init', () => {
         queryFilter: '',
         queryHelpOpen: false,
         queryHelpContent: '',
-        tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'Cutaway', 'Drone', 'Establishing', 'Motion'],
+        tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'Cutaway', 'Drone', 'Establishing', 'Motion', 'Static'],
 
         librarySort: 'date',
         librarySortDir: 'asc',
@@ -638,9 +638,14 @@ document.addEventListener('alpine:init', () => {
 
         async fetchClips() {
             try {
-                const response = await fetch('http://localhost:8000/clips');
-                const newClips = await response.json();
-                this.clips = newClips;
+                const query = this.queryFilter.trim();
+                const url = query
+                    ? `http://localhost:8000/clips?query=${encodeURIComponent(query)}`
+                    : 'http://localhost:8000/clips';
+                const response = await fetch(url);
+                const data = await response.json();
+                if (!Array.isArray(data)) return;
+                this.clips = data;
                 if (this.selectedClip) {
                     const updatedClip = this.clips.find(c => c.id === this.selectedClip.id);
                     if (updatedClip) {
