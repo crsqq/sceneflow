@@ -56,6 +56,8 @@ document.addEventListener('alpine:init', () => {
 
         async init() {
             console.log('SceneFlow App Initialized');
+            this.status = 'Connecting…';
+            this.statusType = 'info';
 
             // Setup WebSocket for telemetry
             const ws = new WebSocket('ws://localhost:8000/ws');
@@ -67,9 +69,21 @@ document.addEventListener('alpine:init', () => {
             ws.onopen = () => console.log('WebSocket connected');
             ws.onclose = () => console.log('WebSocket disconnected');
 
-            // Initial fetch
+            await this.waitForServer();
             await this.fetchClips();
             await this.fetchSequences();
+            this.status = 'Ready';
+            this.statusType = 'info';
+        },
+
+        async waitForServer(maxAttempts = 20, delayMs = 300) {
+            for (let i = 0; i < maxAttempts; i++) {
+                try {
+                    const r = await fetch('http://localhost:8000/');
+                    if (r.ok) return;
+                } catch (_) {}
+                await new Promise(res => setTimeout(res, delayMs));
+            }
         },
 
         handleTelemetry(msg) {
@@ -88,6 +102,7 @@ document.addEventListener('alpine:init', () => {
                 this.statusType = 'success';
                 this.showToast(`Scan complete · ${msg.data.new_clips} new clips`, 'success');
                 this.fetchClips();
+                this.fetchSequences();
                 setTimeout(() => { this.status = 'Ready'; this.statusType = 'info'; }, 4000);
             } else if (msg.event === 'clip_updated') {
                 this.fetchClips();
@@ -607,8 +622,6 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 console.error('Error fetching clips:', error);
-                this.status = 'Error fetching clips';
-                this.statusType = 'error';
             }
         },
 
