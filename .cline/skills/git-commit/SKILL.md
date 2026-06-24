@@ -10,6 +10,6 @@ description: Stage all changes and create a conventional commit. The user provid
 
 1. Run `git --no-pager diff HEAD` to understand what changed.
 2. Stage everything: `git add -A`
-3. Write a short, imperative-mood commit message based on the diff, then commit:
+3. Write a short, imperative-mood commit message based on the diff, no coauthored, no long explanations; then commit:
    `git commit -m "<prefix>: <message inferred from diff>"`
 4. Run `git log --oneline -1` and show the user the result.

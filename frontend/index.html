@@ -231,20 +231,20 @@
                     <div class="metadata-fields">
                         <label>
                             <span>Short Name</span>
-                            <input type="text" x-model="selectedClip.short_name" placeholder="e.g. Drone opening">
+                            <input type="text" x-model="selectedClip.short_name" placeholder="e.g. Drone opening" @keyup.enter="saveSelectedClipMetadata()">
                         </label>
                         <div class="metadata-geo-row">
                             <label>
                                 <span>Recorded At</span>
-                                <input type="datetime-local" x-model="selectedClip.recorded_at">
+                                <input type="datetime-local" x-model="selectedClip.recorded_at" readonly>
                             </label>
                             <label>
                                 <span>Lat</span>
-                                <input type="number" step="any" x-model="selectedClip.latitude" placeholder="—">
+                                <input type="number" step="any" x-model="selectedClip.latitude" placeholder="—" readonly>
                             </label>
                             <label>
                                 <span>Long</span>
-                                <input type="number" step="any" x-model="selectedClip.longitude" placeholder="—">
+                                <input type="number" step="any" x-model="selectedClip.longitude" placeholder="—" readonly>
                             </label>
                             <a
                                 x-show="selectedClip && selectedClip.latitude !== null && selectedClip.latitude !== '' && selectedClip.longitude !== null && selectedClip.longitude !== ''"
@@ -255,7 +255,6 @@
                                 title="Open in Google Maps"
                             >🗺</a>
                         </div>
-                        <button @click="saveSelectedClipMetadata()" class="btn-primary">Save Metadata</button>
                     </div>
                 </div>
 
