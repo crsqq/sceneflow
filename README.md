@@ -65,13 +65,13 @@ Tags categorise clips during culling and storyboard assembly.
 | Tag | Purpose |
 |---|---|
 | **Wide** | Wide-angle shot showing the full environment. Used to establish geography, show scale, or give breathing room between tight shots. |
-| **POV** | Point-of-view shot positioned as if through a subject's eyes. Common in action, sports, or experiential content. |
 | **Slow-Mo** | High frame rate footage played back slower. Requires speed adjustment in the NLE; used for emphasis or emotional impact. |
 | **Close-Up** | Tight framing on a detail — face, hands, texture, object. The building block of emotional storytelling; intercut with wides for rhythm. |
 | **Cutaway** | Cuts away from the main subject to something in the scene — a reaction, a detail, an environmental element. Used to cover edits or add context. |
 | **Drone** | Aerial footage. Used for establishing geography, scene transitions, or cinematic opening/closing shots. |
 | **Establishing** | Orients the viewer to a new location or time. Typically placed at the top of a scene to answer "where are we?" before cutting to tighter coverage. |
-| **Motion** | Shot defined by camera movement — gimbal push-in, slider, tracking, orbit. Flag these to pace sequences by alternating moving and locked-off shots. |
+| **Motion** | Shot defined by camera movement — gimbal push-in, slider, tracking, pan, orbit. Flag these to pace sequences by alternating moving and locked-off shots. |
+| **Static** | Locked-off, tripod shot with no camera movement. The natural counterpart to Motion; use to break up pans and give the eye a rest. |
 
 ## Example Storyboard — Nature Short
 

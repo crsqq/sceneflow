@@ -48,7 +48,7 @@ document.addEventListener('alpine:init', () => {
         queryFilter: '',
         queryHelpOpen: false,
         queryHelpContent: '',
-        tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'Cutaway', 'Drone', 'Establishing', 'Motion', 'Static'],
+        tagPalette: ['Wide', 'Slow-Mo', 'Close-Up', 'Cutaway', 'Drone', 'Establishing', 'Motion', 'Static'],
 
         librarySort: 'date',
         librarySortDir: 'asc',
