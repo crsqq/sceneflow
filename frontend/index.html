@@ -348,7 +348,7 @@
     <div class="modal-backdrop" x-show="markerNoteModalOpen" x-cloak @click="closeMarkerNoteModal()">
         <div class="modal-card" @click.stop>
             <h3 x-text="markerNoteModalTitle">Marker Note</h3>
-            <textarea x-model="markerNoteDraft" rows="3" placeholder="Enter note (optional)"></textarea>
+            <textarea x-model="markerNoteDraft" rows="3" placeholder="Enter note (optional)" @keydown.enter.prevent="submitMarkerNote()" x-effect="markerNoteModalOpen && $nextTick(() => $el.focus())"></textarea>
             <div class="modal-actions">
                 <button @click="submitMarkerNote()" class="btn-primary">OK</button>
                 <button @click="closeMarkerNoteModal()" class="btn-secondary">Cancel</button>
