@@ -1,4 +1,25 @@
 document.addEventListener('alpine:init', () => {
+    const AC_FIELDS = ['orientation', 'resolution', 'frame_rate', 'is_kept', 'is_rejected',
+                       'tags', 'recorded_at', 'latitude', 'longitude', 'file_name', 'short_name'];
+    const AC_OPERATORS = {
+        orientation:  ['=', '!='],
+        resolution:   ['=', '!='],
+        frame_rate:   ['=', '!=', '>', '<', '>=', '<='],
+        is_kept:      ['='],
+        is_rejected:  ['='],
+        tags:         ['IN', 'NOT IN'],
+        recorded_at:  ['=', '!=', '>', '<', '>=', '<='],
+        latitude:     ['=', '!=', '>', '<', '>=', '<='],
+        longitude:    ['=', '!=', '>', '<', '>=', '<='],
+        file_name:    ['=', '!='],
+        short_name:   ['=', '!='],
+    };
+    const AC_VALUES = {
+        orientation:  ['"landscape"', '"portrait"'],
+        is_kept:      ['true', 'false'],
+        is_rejected:  ['true', 'false'],
+    };
+
     Alpine.data('app', () => ({
         status: 'Ready',
         statusType: 'info',
@@ -27,7 +48,7 @@ document.addEventListener('alpine:init', () => {
         queryFilter: '',
         queryHelpOpen: false,
         queryHelpContent: '',
-        tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'B-Roll', 'Drone', 'Interview', 'Establishing'],
+        tagPalette: ['Wide', 'POV', 'Slow-Mo', 'Close-Up', 'Cutaway', 'Drone', 'Establishing', 'Motion'],
 
         librarySort: 'date',
         librarySortDir: 'asc',
@@ -49,6 +70,11 @@ document.addEventListener('alpine:init', () => {
 
         toasts: [],
         toastId: 0,
+
+        acOpen: false,
+        acItems: [],
+        acIndex: -1,
+        acReplaceStart: 0,
 
         // Shuttle state
         shuttleSpeed: 0,
@@ -490,6 +516,8 @@ document.addEventListener('alpine:init', () => {
 
         async clearQuery() {
             this.queryFilter = '';
+            this.acOpen = false;
+            this.acIndex = -1;
             await this.fetchClips();
         },
 
@@ -1006,6 +1034,209 @@ document.addEventListener('alpine:init', () => {
             setTimeout(() => {
                 this.toasts = this.toasts.filter(t => t.id !== id);
             }, 3000);
+        },
+
+        // ───────────────────────────────
+        // Query Autocomplete
+        // ───────────────────────────────
+
+        acTokenize(text) {
+            const tokens = [];
+            let i = 0;
+            while (i < text.length) {
+                if (/\s/.test(text[i])) { i++; continue; }
+                if (text[i] === '"') {
+                    const start = i++;
+                    while (i < text.length && text[i] !== '"') {
+                        if (text[i] === '\\') i++;
+                        i++;
+                    }
+                    const closed = i < text.length;
+                    if (closed) i++;
+                    tokens.push({ type: 'STRING', value: text.slice(start, i), start, closed });
+                    continue;
+                }
+                if (text[i] === '!' && text[i + 1] === '=') { tokens.push({ type: 'OP', value: '!=', start: i }); i += 2; continue; }
+                if (text[i] === '>' && text[i + 1] === '=') { tokens.push({ type: 'OP', value: '>=', start: i }); i += 2; continue; }
+                if (text[i] === '<' && text[i + 1] === '=') { tokens.push({ type: 'OP', value: '<=', start: i }); i += 2; continue; }
+                if (text[i] === '=') { tokens.push({ type: 'OP', value: '=', start: i }); i++; continue; }
+                if (text[i] === '>') { tokens.push({ type: 'OP', value: '>', start: i }); i++; continue; }
+                if (text[i] === '<') { tokens.push({ type: 'OP', value: '<', start: i }); i++; continue; }
+                if (text[i] === '(') { tokens.push({ type: 'LPAREN', value: '(', start: i }); i++; continue; }
+                if (text[i] === ')') { tokens.push({ type: 'RPAREN', value: ')', start: i }); i++; continue; }
+                if (text[i] === ',') { tokens.push({ type: 'COMMA', value: ',', start: i }); i++; continue; }
+                if (/[a-zA-Z0-9_.]/.test(text[i])) {
+                    const start = i;
+                    while (i < text.length && /[a-zA-Z0-9_.]/.test(text[i])) i++;
+                    tokens.push({ type: 'WORD', value: text.slice(start, i), start });
+                    continue;
+                }
+                i++;
+            }
+            return tokens;
+        },
+
+        acParseContext(text) {
+            const tokens = this.acTokenize(text);
+            const endsWithSpace = text.length > 0 && /\s$/.test(text);
+            const last = tokens[tokens.length - 1];
+            const lastIsPartial = last && !endsWithSpace && (
+                last.type === 'WORD' ||
+                (last.type === 'STRING' && !last.closed)
+            );
+
+            let partial, replaceStart, fullTokens;
+            if (!lastIsPartial) {
+                partial = '';
+                replaceStart = text.length;
+                fullTokens = tokens;
+            } else {
+                partial = last.value;
+                replaceStart = last.start;
+                fullTokens = tokens.slice(0, -1);
+            }
+
+            let state = 'field';
+            let field = null;
+
+            for (const tok of fullTokens) {
+                if (state === 'field') {
+                    if (tok.type === 'WORD' && AC_FIELDS.includes(tok.value.toLowerCase())) {
+                        field = tok.value.toLowerCase();
+                        state = 'operator';
+                    }
+                } else if (state === 'operator') {
+                    if (tok.type === 'OP') {
+                        state = 'value';
+                    } else if (tok.type === 'WORD') {
+                        const v = tok.value.toUpperCase();
+                        if (v === 'IN') state = 'in-open';
+                        else if (v === 'NOT') state = 'not-in';
+                    }
+                } else if (state === 'not-in') {
+                    if (tok.type === 'WORD' && tok.value.toUpperCase() === 'IN') state = 'in-open';
+                } else if (state === 'in-open') {
+                    if (tok.type === 'LPAREN') state = 'in-list';
+                } else if (state === 'in-list') {
+                    if (tok.type === 'STRING' || tok.type === 'WORD') state = 'in-after-value';
+                    else if (tok.type === 'RPAREN') { state = 'connector'; field = null; }
+                } else if (state === 'in-after-value') {
+                    if (tok.type === 'COMMA') state = 'in-list';
+                    else if (tok.type === 'RPAREN') { state = 'connector'; field = null; }
+                } else if (state === 'value') {
+                    if (tok.type === 'STRING' || tok.type === 'WORD') { state = 'connector'; field = null; }
+                } else if (state === 'connector') {
+                    if (tok.type === 'WORD' && ['and', 'or'].includes(tok.value.toLowerCase())) {
+                        state = 'field';
+                        field = null;
+                    }
+                }
+            }
+
+            return { state, field, partial, replaceStart };
+        },
+
+        acMatchesPartial(suggestion, partial) {
+            if (!partial) return true;
+            const strip = s => s.replace(/^"/, '').replace(/"$/, '').toLowerCase();
+            return strip(suggestion).startsWith(strip(partial));
+        },
+
+        acComputeSuggestions() {
+            const text = this.queryFilter;
+            if (!text) { this.acOpen = false; return; }
+
+            const ctx = this.acParseContext(text);
+            this.acReplaceStart = ctx.replaceStart;
+            const { state, field, partial } = ctx;
+
+            let candidates = [];
+
+            if (state === 'field') {
+                candidates = AC_FIELDS
+                    .filter(f => f.startsWith(partial.toLowerCase()))
+                    .map(f => ({ display: f, insert: f, hint: 'field' }));
+            } else if (state === 'operator') {
+                const ops = AC_OPERATORS[field] || [];
+                candidates = ops
+                    .filter(op => op.toUpperCase().startsWith(partial.toUpperCase()))
+                    .map(op => ({ display: op, insert: op, hint: 'operator' }));
+            } else if (state === 'not-in') {
+                if ('IN'.startsWith(partial.toUpperCase())) {
+                    candidates = [{ display: 'IN', insert: 'IN', hint: 'keyword' }];
+                }
+            } else if (state === 'value' || state === 'in-list') {
+                if (state === 'in-list' || field === 'tags') {
+                    const tagValues = [...new Set(this.clips.flatMap(c => c.tags.map(t => t.value)))].sort();
+                    candidates = tagValues
+                        .filter(v => this.acMatchesPartial(v, partial))
+                        .map(v => ({ display: v, insert: `"${v}"`, hint: 'tag' }));
+                } else if (AC_VALUES[field]) {
+                    candidates = AC_VALUES[field]
+                        .filter(v => this.acMatchesPartial(v, partial))
+                        .map(v => ({ display: v.replace(/"/g, ''), insert: v, hint: 'value' }));
+                }
+            } else if (state === 'connector') {
+                candidates = ['AND', 'OR']
+                    .filter(kw => kw.startsWith(partial.toUpperCase()))
+                    .map(kw => ({ display: kw, insert: kw, hint: 'keyword' }));
+            }
+
+            if (candidates.length === 0) {
+                this.acOpen = false;
+            } else {
+                this.acItems = candidates;
+                this.acOpen = true;
+                this.acIndex = -1;
+            }
+        },
+
+        acSelect(item) {
+            this.queryFilter = this.queryFilter.slice(0, this.acReplaceStart) + item.insert + ' ';
+            this.acOpen = false;
+            this.acIndex = -1;
+            this.$nextTick(() => {
+                const input = this.$refs.queryInput;
+                if (input) {
+                    input.focus();
+                    input.setSelectionRange(this.queryFilter.length, this.queryFilter.length);
+                }
+                this.acComputeSuggestions();
+            });
+        },
+
+        acHandleKey(event) {
+            if (event.key === 'ArrowDown') {
+                if (!this.acOpen) return;
+                event.preventDefault();
+                this.acIndex = Math.min(this.acIndex + 1, this.acItems.length - 1);
+                this.$nextTick(() => document.querySelector('.ac-item--selected')?.scrollIntoView({ block: 'nearest' }));
+            } else if (event.key === 'ArrowUp') {
+                if (!this.acOpen) return;
+                event.preventDefault();
+                this.acIndex = Math.max(this.acIndex - 1, -1);
+                this.$nextTick(() => document.querySelector('.ac-item--selected')?.scrollIntoView({ block: 'nearest' }));
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (this.acOpen && this.acIndex >= 0) {
+                    this.acSelect(this.acItems[this.acIndex]);
+                } else {
+                    this.acOpen = false;
+                    this.applyQuery();
+                }
+            } else if (event.key === 'Escape') {
+                if (this.acOpen) {
+                    event.preventDefault();
+                    this.acOpen = false;
+                    this.acIndex = -1;
+                }
+            } else if (event.key === 'Tab') {
+                if (this.acOpen && this.acItems.length > 0) {
+                    event.preventDefault();
+                    const target = this.acIndex >= 0 ? this.acItems[this.acIndex] : this.acItems[0];
+                    this.acSelect(target);
+                }
+            }
         }
     }));
 });

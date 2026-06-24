@@ -151,15 +151,32 @@
 
                 <!-- Query Filter -->
                 <div class="panel">
-                    <div class="query-bar">
-                        <input
-                            type="text"
-                            x-model="queryFilter"
-                            @keyup.enter="applyQuery()"
-                            placeholder='e.g. orientation = "portrait" or type /help'
-                        >
-                        <button @click="applyQuery()" class="btn-primary">Filter</button>
-                        <button @click="clearQuery()" class="btn-secondary" x-show="queryFilter">Clear</button>
+                    <div class="query-bar-wrapper">
+                        <div class="query-bar">
+                            <input
+                                type="text"
+                                x-ref="queryInput"
+                                x-model="queryFilter"
+                                @input="acComputeSuggestions()"
+                                @keydown="acHandleKey($event)"
+                                @blur="setTimeout(() => { acOpen = false; acIndex = -1; }, 150)"
+                                placeholder='e.g. orientation = "portrait" or type /help'
+                            >
+                            <button @click="applyQuery()" class="btn-primary">Filter</button>
+                            <button @click="clearQuery()" class="btn-secondary" x-show="queryFilter">Clear</button>
+                        </div>
+                        <div class="ac-dropdown" x-show="acOpen" x-cloak>
+                            <template x-for="(item, idx) in acItems" :key="idx">
+                                <div
+                                    class="ac-item"
+                                    :class="{'ac-item--selected': idx === acIndex}"
+                                    @mousedown.prevent="acSelect(item)"
+                                >
+                                    <span class="ac-text" x-text="item.display"></span>
+                                    <span class="ac-hint" x-text="item.hint"></span>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                     <div class="clip-count" x-text="filteredClips.length + ' clips shown'"></div>
                 </div>
