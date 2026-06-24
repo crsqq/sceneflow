@@ -148,7 +148,7 @@
                             type="text"
                             x-model="queryFilter"
                             @keyup.enter="applyQuery()"
-                            placeholder='e.g. orientation = "vertical" or type /help'
+                            placeholder='e.g. orientation = "portrait" or type /help'
                         >
                         <button @click="applyQuery()" class="btn-primary">Filter</button>
                         <button @click="clearQuery()" class="btn-secondary" x-show="queryFilter">Clear</button>
@@ -201,7 +201,7 @@
                                     'is-processing': proxyStatuses[clip.id] === 'generating'
                                 }"
                             >
-                                <div class="clip-thumb" :class="clip.orientation || 'horizontal'">
+                                <div class="clip-thumb" :class="clip.orientation || 'landscape'">
                                     <img
                                         x-show="clip.thumbnail_path"
                                         :src="'http://localhost:8000/thumbs/' + clip.id"

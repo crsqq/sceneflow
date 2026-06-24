@@ -81,13 +81,23 @@ class MediaProcessor:
             height = int(video_stream.get('height', 0))
 
             exif = self._get_exif_metadata(file_path)
+            
+            # Determine orientation: check rotation first, then fall back to width/height comparison
+            rotation = exif.get("rotation")
+            if rotation == 90:
+                orientation = "portrait"
+                # Swap width/height for rotated videos
+                display_width, display_height = height, width
+            else:
+                orientation = "portrait" if height > width else "landscape"
+                display_width, display_height = width, height
 
             return {
                 "file_path": file_path,
                 "file_name": os.path.basename(file_path),
-                "resolution": f"{width}x{height}",
+                "resolution": f"{display_width}x{display_height}",
                 "frame_rate": self._parse_fps(video_stream.get('avg_frame_rate', '0/0')),
-                "orientation": "vertical" if height > width else "horizontal",
+                "orientation": orientation,
                 "recorded_at": exif.get("recorded_at"),
                 "latitude": exif.get("latitude"),
                 "longitude": exif.get("longitude"),
@@ -106,19 +116,20 @@ class MediaProcessor:
             return 0.0
 
     def _get_exif_metadata(self, file_path: str) -> dict:
-        """Uses exiftool to extract CreateDate and GPS coordinates.
+        """Uses exiftool to extract CreateDate, GPS coordinates, and Rotation.
 
         Returns a dict with keys recorded_at (datetime or None), latitude (float or None),
-        longitude (float or None). If exiftool returns no value for a field, it is None.
+        longitude (float or None), rotation (int or None). If exiftool returns no value for a field, it is None.
         """
-        result = {"recorded_at": None, "latitude": None, "longitude": None}
+        result = {"recorded_at": None, "latitude": None, "longitude": None, "rotation": None}
         try:
             cmd = [
-                'exiftool', '-time:CreateDate', '-GPSLatitude', '-GPSLongitude',
+                'exiftool', '-time:CreateDate', '-GPSLatitude', '-GPSLongitude', '-Rotation',
                 '-n', '-j', file_path
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(proc.stdout)
+            logger.info(f"exiftool JSON output for {file_path}: {proc.stdout}")
             if not data:
                 return result
             entry = data[0]
@@ -136,6 +147,13 @@ class MediaProcessor:
                 result['latitude'] = float(lat)
             if lon is not None:
                 result['longitude'] = float(lon)
+            
+            rotation = entry.get('Rotation')
+            if rotation is not None:
+                result['rotation'] = int(rotation)
+                logger.info(f"Rotation for {file_path}: {rotation}")
+            else:
+                logger.info(f"No rotation found for {file_path}")
         except Exception as e:
             logger.error(f"Error extracting exif metadata for {file_path}: {e}")
         return result
@@ -167,10 +185,22 @@ class MediaProcessor:
             logger.info(f"Generating proxy for {source_path} -> {proxy_path}")
             await telemetry.broadcast("proxy_started", {"clip_id": clip_id, "file_name": file_name})
 
+            # Check for rotation to adjust scale filter
+            exif = self._get_exif_metadata(source_path)
+            rotation = exif.get("rotation")
+            
             # FFmpeg command for low-res proxy (e.g., 720p, h264)
+            # Use swapped dimensions for rotation 90
+            if rotation == 90:
+                proxy_scale = 'scale=720:-2'
+                thumb_scale = 'scale=-2:320'
+            else:
+                proxy_scale = 'scale=-2:720'
+                thumb_scale = 'scale=320:-2'
+            
             proxy_cmd = [
                 'ffmpeg', '-y', '-i', source_path,
-                '-vf', 'scale=-2:720',
+                '-vf', proxy_scale,
                 '-c:v', 'libx264', '-preset', 'veryfast',
                 '-crf', '28', '-c:a', 'aac', '-b:a', '128k',
                 proxy_path
@@ -181,7 +211,7 @@ class MediaProcessor:
                 'ffmpeg', '-y', '-i', source_path,
                 '-ss', '00:00:01.000',
                 '-vframes', '1',
-                '-vf', 'scale=320:-2',
+                '-vf', thumb_scale,
                 '-q:v', '2',
                 thumbnail_path
             ]

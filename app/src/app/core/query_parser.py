@@ -261,7 +261,7 @@ OPERATORS:
   =, !=, >, <, >=, <=, IN, NOT IN, AND, OR
 
 EXAMPLES:
-  orientation = "vertical"
+  orientation = "portrait"
   tags IN ("Wide", "Drone") AND is_kept = true
   frame_rate >= 30 AND resolution = "1920x1080"
   recorded_at >= "2024-01-01"

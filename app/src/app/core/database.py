@@ -20,7 +20,7 @@ class MediaClip(Base):
     short_name = Column(String, nullable=True)
     resolution = Column(String)
     frame_rate = Column(Float)
-    orientation = Column(String)  # 'horizontal' | 'vertical'
+    orientation = Column(String)  # 'landscape' | 'portrait'
     recorded_at = Column(DateTime, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)

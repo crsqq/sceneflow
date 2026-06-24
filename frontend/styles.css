@@ -472,7 +472,7 @@ body {
     justify-content: center;
 }
 
-.clip-thumb.vertical {
+.clip-thumb.portrait {
     width: 36px;
     height: 64px;
 }
