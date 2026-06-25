@@ -1,7 +1,7 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.core.database import DatabaseManager, MediaClip
+from app.core.exporter import StoryboardExporter
 from app.core.media_engine import MediaProcessor
 from app.core.telemetry import TelemetryServer
 
@@ -27,6 +28,7 @@ app.add_middleware(
 db_manager: DatabaseManager | None = None
 telemetry = TelemetryServer()
 media_processor = MediaProcessor()
+_background_tasks: set[asyncio.Task] = set()
 
 
 def set_project(project_dir: str):
@@ -81,7 +83,7 @@ async def root():
 
 
 @app.get("/clips")
-async def get_clips(query: str = None):
+async def get_clips(query: str | None = None):
     if db_manager is None:
         return []
 
@@ -113,7 +115,7 @@ async def get_thumbnail(clip_id: str):
         from app.core.database import MediaClip
 
         clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
-        if not clip or not clip.thumbnail_path or not os.path.exists(clip.thumbnail_path):
+        if not clip or not clip.thumbnail_path or not Path(clip.thumbnail_path).exists():
             raise HTTPException(status_code=404, detail="Thumbnail not found")
         return FileResponse(clip.thumbnail_path)
 
@@ -216,9 +218,6 @@ async def websocket_endpoint(websocket: WebSocket):
         await telemetry.disconnect(websocket)
 
 
-from app.core.exporter import StoryboardExporter
-
-
 class SequenceRequest(BaseModel):
     name: str
 
@@ -302,7 +301,7 @@ async def scan_directory(request: ScanRequest):
     total = len(clips_data)
 
     logger = logging.getLogger(__name__)
-    logger.info(f"Scanning {request.path}: found {total} video file(s)")
+    logger.info("Scanning %s: found %d video file(s)", request.path, total)
 
     proxy_jobs: list[tuple[str, str]] = []
 
@@ -334,13 +333,13 @@ async def scan_directory(request: ScanRequest):
                 session.refresh(new_clip)
                 new_clips_count += 1
                 clip_id = new_clip.id
-                logger.info(f"Added clip: {data['file_name']} ({data['resolution']})")
+                logger.info("Added clip: %s (%s)", data["file_name"], data["resolution"])
                 if data.get("srt_detected"):
                     db_manager.add_tag(clip_id, "technical", "Drone")
             else:
                 skipped_clips_count += 1
                 clip_id = None
-                logger.info(f"Skipped duplicate: {data['file_name']}")
+                logger.info("Skipped duplicate: %s", data["file_name"])
 
         if clip_id:
             proxy_jobs.append((clip_id, data["file_path"]))
@@ -348,10 +347,12 @@ async def scan_directory(request: ScanRequest):
     await telemetry.broadcast(
         "scan_complete", {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}
     )
-    logger.info(f"Scan complete: {new_clips_count} new, {skipped_clips_count} skipped, {total} total")
+    logger.info("Scan complete: %d new, %d skipped, %d total", new_clips_count, skipped_clips_count, total)
 
     # Start proxy generation with bounded concurrency in the background
     if proxy_jobs:
-        asyncio.create_task(media_processor.process_proxy_queue(proxy_jobs, db_manager, telemetry))
+        _proxy_task = asyncio.create_task(media_processor.process_proxy_queue(proxy_jobs, db_manager, telemetry))
+        _background_tasks.add(_proxy_task)
+        _proxy_task.add_done_callback(_background_tasks.discard)
 
     return {"new_clips": new_clips_count, "skipped_clips": skipped_clips_count, "total_found": total}

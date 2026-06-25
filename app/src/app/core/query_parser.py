@@ -7,12 +7,11 @@ Supports fields: orientation, resolution, frame_rate, is_kept, is_rejected,
 """
 
 import re
-from typing import Any
+from typing import Any, ClassVar
 
 
 class QueryNode:
     """Base class for query AST nodes."""
-
 
 
 class FieldNode(QueryNode):
@@ -74,8 +73,7 @@ class InNode(QueryNode):
 class QueryParser:
     """Parses JQL-like query strings into an AST."""
 
-    # Valid fields and their types
-    FIELD_TYPES = {
+    FIELD_TYPES: ClassVar[dict[str, type]] = {
         "orientation": str,
         "resolution": str,
         "frame_rate": float,
@@ -90,8 +88,8 @@ class QueryParser:
     }
 
     # Valid operators
-    OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "IN", "NOT IN"]
-    LOGICAL_OPERATORS = ["AND", "OR"]
+    OPERATORS: ClassVar[list[str]] = ["=", "!=", ">", "<", ">=", "<=", "IN", "NOT IN"]
+    LOGICAL_OPERATORS: ClassVar[list[str]] = ["AND", "OR"]
 
     def __init__(self, query_string: str):
         self.query_string = query_string.strip()
@@ -147,7 +145,7 @@ class QueryParser:
             return self.tokens[self.pos]
         return None
 
-    def _consume(self, expected_type: str = None, expected_value: str = None) -> tuple:
+    def _consume(self, expected_type: str | None = None, expected_value: str | None = None) -> tuple:
         """Consume the next token."""
         token = self._peek()
         if token is None:

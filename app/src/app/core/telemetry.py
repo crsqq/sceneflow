@@ -25,5 +25,5 @@ class TelemetryServer:
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except Exception as e:
-                logger.error(f"Error broadcasting to websocket: {e}")
+            except OSError as e:
+                logger.error("Error broadcasting to websocket: %s", e)

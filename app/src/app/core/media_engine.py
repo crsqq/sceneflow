@@ -4,7 +4,8 @@ import logging
 import os
 import re
 import subprocess
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class MediaProcessor:
 
                 for file in files:
                     if file.lower().endswith(video_extensions):
-                        full_path = os.path.join(root, file)
+                        full_path = str(Path(root) / file)
                         metadata = self._get_metadata(full_path)
                         if metadata:
                             clips.append(metadata)
@@ -105,7 +106,7 @@ class MediaProcessor:
 
             return {
                 "file_path": file_path,
-                "file_name": os.path.basename(file_path),
+                "file_name": Path(file_path).name,
                 "resolution": f"{display_width}x{display_height}",
                 "frame_rate": self._parse_fps(video_stream.get("avg_frame_rate", "0/0")),
                 "orientation": orientation,
@@ -116,8 +117,8 @@ class MediaProcessor:
                 "proxy_path": "",  # To be filled later
                 "thumbnail_path": "",  # To be filled later
             }
-        except Exception as e:
-            logger.error(f"Error extracting metadata for {file_path}: {e}")
+        except (subprocess.SubprocessError, json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error("Error extracting metadata for %s: %s", file_path, e)
             return None
 
     def _parse_fps(self, fps_str: str) -> float:
@@ -138,7 +139,7 @@ class MediaProcessor:
             cmd = ["exiftool", "-time:CreateDate", "-GPSLatitude", "-GPSLongitude", "-Rotation", "-n", "-j", file_path]
             proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(proc.stdout)
-            logger.info(f"exiftool JSON output for {file_path}: {proc.stdout}")
+            logger.info("exiftool JSON output for %s: %s", file_path, proc.stdout)
             if not data:
                 return result
             entry = data[0]
@@ -146,9 +147,9 @@ class MediaProcessor:
             create_date = entry.get("CreateDate")
             if create_date:
                 try:
-                    result["recorded_at"] = datetime.strptime(create_date, "%Y:%m:%d %H:%M:%S")
+                    result["recorded_at"] = datetime.strptime(create_date, "%Y:%m:%d %H:%M:%S").replace(tzinfo=UTC)
                 except ValueError:
-                    logger.warning(f"Could not parse CreateDate '{create_date}' for {file_path}")
+                    logger.warning("Could not parse CreateDate '%s' for %s", create_date, file_path)
 
             lat = entry.get("GPSLatitude")
             lon = entry.get("GPSLongitude")
@@ -160,27 +161,27 @@ class MediaProcessor:
             rotation = entry.get("Rotation")
             if rotation is not None:
                 result["rotation"] = int(rotation)
-                logger.info(f"Rotation for {file_path}: {rotation}")
+                logger.info("Rotation for %s: %s", file_path, rotation)
             else:
-                logger.info(f"No rotation found for {file_path}")
-        except Exception as e:
-            logger.error(f"Error extracting exif metadata for {file_path}: {e}")
+                logger.info("No rotation found for %s", file_path)
+        except (subprocess.SubprocessError, json.JSONDecodeError, ValueError) as e:
+            logger.error("Error extracting exif metadata for %s: %s", file_path, e)
         return result
 
     _SRT_COORD_RE = re.compile(r"\[latitude:\s*([-\d.]+)\]\s*\[longitude:\s*([-\d.]+)\]")
 
     def _parse_srt_metadata(self, file_path: str) -> dict:
         """Check for a DJI-style .SRT sidecar next to an .MP4 and extract the first GPS fix."""
-        base = os.path.splitext(file_path)[0]
+        base = Path(file_path).stem
         srt_path = None
         for candidate in (base + ".SRT", base + ".srt"):
-            if os.path.isfile(candidate):
+            if Path(candidate).is_file():
                 srt_path = candidate
                 break
         if srt_path is None:
             return {}
         try:
-            with open(srt_path, encoding="utf-8", errors="replace") as f:
+            with Path(srt_path).open(encoding="utf-8", errors="replace") as f:
                 for line in f:
                     m = self._SRT_COORD_RE.search(line)
                     if m:
@@ -189,8 +190,8 @@ class MediaProcessor:
                             "latitude": float(m.group(1)),
                             "longitude": float(m.group(2)),
                         }
-        except Exception as e:
-            logger.warning(f"Could not read SRT sidecar {srt_path}: {e}")
+        except OSError as e:
+            logger.warning("Could not read SRT sidecar %s: %s", srt_path, e)
         return {"srt_detected": True}
 
     async def generate_proxy(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
@@ -201,22 +202,22 @@ class MediaProcessor:
     async def _generate_proxy_inner(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
         """Actual proxy/thumbnail generation, guarded by the concurrency semaphore."""
         # 1. Determine proxy directory: <project_dir>/.sceneflow/proxies/
-        project_dir = self.project_dir or os.path.dirname(source_path)
-        sceneflow_dir = os.path.join(project_dir, ".sceneflow")
-        proxies_dir = os.path.join(sceneflow_dir, "proxies")
-        thumbs_dir = os.path.join(sceneflow_dir, "thumbs")
-        os.makedirs(proxies_dir, exist_ok=True)
-        os.makedirs(thumbs_dir, exist_ok=True)
+        project_dir = Path(self.project_dir) if self.project_dir else Path(source_path).parent
+        sceneflow_dir = Path(project_dir) / ".sceneflow"
+        proxies_dir = sceneflow_dir / "proxies"
+        thumbs_dir = sceneflow_dir / "thumbs"
+        proxies_dir.mkdir(parents=True, exist_ok=True)
+        thumbs_dir.mkdir(parents=True, exist_ok=True)
 
-        file_name = os.path.basename(source_path)
-        base_name, _ = os.path.splitext(file_name)
+        file_name = Path(source_path).name
+        base_name = Path(source_path).stem
         proxy_filename = f"{base_name}_proxy.mp4"
-        proxy_path = os.path.join(proxies_dir, proxy_filename)
+        proxy_path = str(proxies_dir / proxy_filename)
         thumb_filename = f"{base_name}_thumb.jpg"
-        thumbnail_path = os.path.join(thumbs_dir, thumb_filename)
+        thumbnail_path = str(thumbs_dir / thumb_filename)
 
         try:
-            logger.info(f"Generating proxy for {source_path} -> {proxy_path}")
+            logger.info("Generating proxy for %s -> %s", source_path, proxy_path)
             await telemetry.broadcast("proxy_started", {"clip_id": clip_id, "file_name": file_name})
 
             # Check for rotation to adjust scale filter
@@ -285,10 +286,10 @@ class MediaProcessor:
                 )
                 _thumb_stdout, thumb_stderr = await thumb_process.communicate()
                 if thumb_process.returncode != 0:
-                    logger.warning(f"Thumbnail generation failed for {source_path}: {thumb_stderr.decode()}")
+                    logger.warning("Thumbnail generation failed for %s: %s", source_path, thumb_stderr.decode())
                     thumbnail_path = ""
-            except Exception as thumb_err:
-                logger.warning(f"Thumbnail generation exception for {source_path}: {thumb_err}")
+            except subprocess.SubprocessError as thumb_err:
+                logger.warning("Thumbnail generation exception for %s: %s", source_path, thumb_err)
                 thumbnail_path = ""
 
             # 2. Update database
@@ -310,10 +311,10 @@ class MediaProcessor:
                     "thumbnail_path": thumbnail_path,
                 },
             )
-            logger.info(f"Proxy generated successfully: {proxy_path}")
+            logger.info("Proxy generated successfully: %s", proxy_path)
 
         except Exception as e:
-            logger.error(f"Failed to generate proxy for {source_path}: {e}")
+            logger.error("Failed to generate proxy for %s: %s", source_path, e)
             await telemetry.broadcast("proxy_failed", {"clip_id": clip_id, "error": str(e)})
             raise
 
@@ -323,7 +324,7 @@ class MediaProcessor:
             return
 
         await self._reset_queue_counters(len(jobs))
-        file_name_map = {clip_id: os.path.basename(path) for clip_id, path in jobs}
+        file_name_map = {clip_id: Path(path).name for clip_id, path in jobs}
 
         await telemetry.broadcast("proxy_queue_started", {"total": len(jobs)})
 
@@ -341,7 +342,7 @@ class MediaProcessor:
                     },
                     progress=round(completed / max(total, 1) * 100, 1),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 completed, total, failed = await self._mark_done(failed=True)
                 await telemetry.broadcast(
                     "proxy_queue_progress",

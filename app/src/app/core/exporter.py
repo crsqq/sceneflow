@@ -40,7 +40,7 @@ class StoryboardExporter:
             def _format_section(start: float, end: float | None) -> str:
                 start_str = self._format_time(start)
                 if end is not None and end > start:
-                    return f"{start_str} – {self._format_time(end)}"
+                    return f"{start_str} - {self._format_time(end)}"
                 return start_str
 
             for item in items:

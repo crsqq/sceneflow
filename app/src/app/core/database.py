@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 if TYPE_CHECKING:
     from app.core.query_parser import ComparisonNode, InNode
@@ -67,11 +68,6 @@ class SequenceItem(Base):
     notes = Column(String)
 
 
-import os
-
-from sqlalchemy.orm import Session
-
-
 class DatabaseManager:
     """Encapsulates all SQLite CRUD operations."""
 
@@ -82,9 +78,9 @@ class DatabaseManager:
     @classmethod
     def for_project_dir(cls, project_dir: str) -> DatabaseManager:
         """Create a DatabaseManager whose database lives in <project_dir>/.sceneflow/sceneflow.db."""
-        sceneflow_dir = os.path.join(project_dir, ".sceneflow")
-        os.makedirs(sceneflow_dir, exist_ok=True)
-        db_path = os.path.join(sceneflow_dir, "sceneflow.db")
+        sceneflow_dir = Path(project_dir) / ".sceneflow"
+        sceneflow_dir.mkdir(parents=True, exist_ok=True)
+        db_path = str(sceneflow_dir / "sceneflow.db")
         return cls(db_url=f"sqlite:///{db_path}")
 
     def init_db(self):
@@ -145,7 +141,9 @@ class DatabaseManager:
             session.refresh(sequence)
             return sequence
 
-    def add_sequence_item(self, sequence_id: str, clip_id: str, position: int, notes: str = None) -> SequenceItem:
+    def add_sequence_item(
+        self, sequence_id: str, clip_id: str, position: int, notes: str | None = None
+    ) -> SequenceItem:
         with self.get_session() as session:
             # Shift existing items at or after the target position to make room
             existing_items = (
@@ -244,7 +242,7 @@ class DatabaseManager:
                 session.delete(tag)
                 session.commit()
 
-    def add_marker(self, clip_id: str, timestamp: float, end_timestamp: float = None, note: str = None):
+    def add_marker(self, clip_id: str, timestamp: float, end_timestamp: float | None = None, note: str | None = None):
         with self.get_session() as session:
             from app.core.database import ClipMarker
 
@@ -402,17 +400,13 @@ class DatabaseManager:
                 # Clips that have at least one of the specified tags
                 from sqlalchemy import or_
 
-                tag_conditions = []
-                for tag_value in node.values:
-                    tag_conditions.append(MediaClip.tags.any(Tag.value == tag_value))
+                tag_conditions = [MediaClip.tags.any(Tag.value == tag_value) for tag_value in node.values]
                 query = query.filter(or_(*tag_conditions))
             elif node.operator == "NOT IN":
                 # Clips that don't have any of the specified tags
                 from sqlalchemy import and_
 
-                tag_conditions = []
-                for tag_value in node.values:
-                    tag_conditions.append(~MediaClip.tags.any(Tag.value == tag_value))
+                tag_conditions = [~MediaClip.tags.any(Tag.value == tag_value) for tag_value in node.values]
                 query = query.filter(and_(*tag_conditions))
         else:
             # Regular field IN/NOT IN
