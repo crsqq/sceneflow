@@ -3,6 +3,7 @@ import logging
 import os
 import glob
 import json
+import re
 import asyncio
 from datetime import datetime
 
@@ -81,7 +82,19 @@ class MediaProcessor:
             height = int(video_stream.get('height', 0))
 
             exif = self._get_exif_metadata(file_path)
-            
+
+            latitude = exif.get("latitude")
+            longitude = exif.get("longitude")
+            srt_detected = False
+
+            if file_path.lower().endswith('.mp4'):
+                srt = self._parse_srt_metadata(file_path)
+                if srt.get('srt_detected'):
+                    srt_detected = True
+                    if srt.get('latitude') is not None:
+                        latitude = srt['latitude']
+                        longitude = srt['longitude']
+
             # Determine orientation: check rotation first, then fall back to width/height comparison
             rotation = exif.get("rotation")
             if rotation == 90:
@@ -99,8 +112,9 @@ class MediaProcessor:
                 "frame_rate": self._parse_fps(video_stream.get('avg_frame_rate', '0/0')),
                 "orientation": orientation,
                 "recorded_at": exif.get("recorded_at"),
-                "latitude": exif.get("latitude"),
-                "longitude": exif.get("longitude"),
+                "latitude": latitude,
+                "longitude": longitude,
+                "srt_detected": srt_detected,
                 "proxy_path": "", # To be filled later
                 "thumbnail_path": "" # To be filled later
             }
@@ -157,6 +171,32 @@ class MediaProcessor:
         except Exception as e:
             logger.error(f"Error extracting exif metadata for {file_path}: {e}")
         return result
+
+    _SRT_COORD_RE = re.compile(r'\[latitude:\s*([-\d.]+)\]\s*\[longitude:\s*([-\d.]+)\]')
+
+    def _parse_srt_metadata(self, file_path: str) -> dict:
+        """Check for a DJI-style .SRT sidecar next to an .MP4 and extract the first GPS fix."""
+        base = os.path.splitext(file_path)[0]
+        srt_path = None
+        for candidate in (base + '.SRT', base + '.srt'):
+            if os.path.isfile(candidate):
+                srt_path = candidate
+                break
+        if srt_path is None:
+            return {}
+        try:
+            with open(srt_path, 'r', encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    m = self._SRT_COORD_RE.search(line)
+                    if m:
+                        return {
+                            'srt_detected': True,
+                            'latitude': float(m.group(1)),
+                            'longitude': float(m.group(2)),
+                        }
+        except Exception as e:
+            logger.warning(f"Could not read SRT sidecar {srt_path}: {e}")
+        return {'srt_detected': True}
 
     async def generate_proxy(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
         """Background task using FFmpeg to create low-res proxies and a poster thumbnail."""

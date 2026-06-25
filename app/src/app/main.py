@@ -295,6 +295,8 @@ async def scan_directory(request: ScanRequest):
                 new_clips_count += 1
                 clip_id = new_clip.id
                 logger.info(f"Added clip: {data['file_name']} ({data['resolution']})")
+                if data.get('srt_detected'):
+                    db_manager.add_tag(clip_id, 'technical', 'Drone')
             else:
                 skipped_clips_count += 1
                 clip_id = None

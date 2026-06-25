@@ -871,7 +871,7 @@ document.addEventListener('alpine:init', () => {
 
             const key = event.key;
 
-            // Shuttle
+            // Shuttle — J/K/L (standard NLE transport)
             if (key === 'j' || key === 'J') {
                 event.preventDefault();
                 this.shuttle(-1);
@@ -882,7 +882,7 @@ document.addEventListener('alpine:init', () => {
                 this.shuttle(1);
                 return;
             }
-            if (key === 'p' || key === 'P') {
+            if (key === 'k' || key === 'K') {
                 event.preventDefault();
                 this.stopShuttle();
                 return;
@@ -899,6 +899,17 @@ document.addEventListener('alpine:init', () => {
                 this.selectPreviousClip();
                 return;
             }
+            // Shift+Arrow for coarse 5s scrubbing — must come before bare Arrow checks
+            if (key === 'ArrowRight' && event.shiftKey) {
+                event.preventDefault();
+                this.stepPlayer(5);
+                return;
+            }
+            if (key === 'ArrowLeft' && event.shiftKey) {
+                event.preventDefault();
+                this.stepPlayer(-5);
+                return;
+            }
             if (key === 'ArrowRight') {
                 event.preventDefault();
                 this.stepPlayer(1);
@@ -909,18 +920,34 @@ document.addEventListener('alpine:init', () => {
                 this.stepPlayer(-1);
                 return;
             }
-
-            // Culling
-            if (key === 'k' || key === 'K') {
+            if (key === 'Home') {
                 event.preventDefault();
-                this.cullSelected('keep');
+                const player = this.getPlayer();
+                if (player) player.currentTime = 0;
                 return;
             }
 
-            // Close preview
-            if (key === 'Escape') {
+            // Markers — I/O/M (standard NLE)
+            if (key === 'i' || key === 'I') {
                 event.preventDefault();
-                this.closePreview();
+                if (this.selectedClip) this.setMarkerStart();
+                return;
+            }
+            if (key === 'o' || key === 'O') {
+                event.preventDefault();
+                if (this.selectedClip) this.setMarkerEnd();
+                return;
+            }
+            if (key === 'm' || key === 'M') {
+                event.preventDefault();
+                if (this.selectedClip) this.addSingleMarker();
+                return;
+            }
+
+            // Culling — P/X/U (Lightroom Pick/Reject/Unflag)
+            if (key === 'p' || key === 'P') {
+                event.preventDefault();
+                this.cullSelected('keep');
                 return;
             }
             if (key === 'x' || key === 'X') {
@@ -934,12 +961,30 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
 
+            // Close preview
+            if (key === 'Escape') {
+                event.preventDefault();
+                this.closePreview();
+                return;
+            }
+
             // Tagging
             if (/^[1-9]$/.test(key)) {
                 event.preventDefault();
                 const index = parseInt(key, 10) - 1;
                 if (index < this.tagPalette.length) {
                     this.togglePresetTag(this.tagPalette[index]);
+                }
+                return;
+            }
+
+            // Open location in Google Maps
+            if (key === 'g' || key === 'G') {
+                event.preventDefault();
+                if (this.selectedClip && this.selectedClip.latitude !== null && this.selectedClip.latitude !== '' && this.selectedClip.longitude !== null && this.selectedClip.longitude !== '') {
+                    const lat = this.selectedClip.latitude;
+                    const lon = this.selectedClip.longitude;
+                    window.open(`https://www.google.com/maps/search/${lat},${lon}/@${lat},${lon},10z`, '_blank');
                 }
                 return;
             }
@@ -998,14 +1043,14 @@ document.addEventListener('alpine:init', () => {
                 player.pause();
                 return;
             }
-            const rate = Math.pow(2, Math.abs(this.shuttleSpeed));
+            const rate = Math.pow(2, Math.abs(this.shuttleSpeed) - 1);
             player.playbackRate = rate;
             if (this.shuttleSpeed < 0) {
                 // Reverse playback is not universally supported; step backward instead
                 player.pause();
                 const step = () => {
                     if (this.shuttleSpeed >= 0) return;
-                    player.currentTime = Math.max(0, player.currentTime - 0.15 * Math.pow(2, Math.abs(this.shuttleSpeed)));
+                    player.currentTime = Math.max(0, player.currentTime - 0.15 * Math.pow(2, Math.abs(this.shuttleSpeed) - 1));
                     this.shuttleTimeout = setTimeout(step, 100);
                 };
                 step();

@@ -204,15 +204,15 @@
                 <div class="player-toolbar">
                     <div class="player-actions">
                         <button @click="closePreview()" class="btn-secondary" title="Close preview (Esc)">× Close</button>
-                        <button @click="setMarkerStart()" :class="pendingMarkerStart !== null ? 'btn-active' : ''">
+                        <button @click="setMarkerStart()" :class="pendingMarkerStart !== null ? 'btn-active' : ''" title="Set marker In point (I)">
                             <span x-text="pendingMarkerStart !== null ? 'Start: ' + formatTime(pendingMarkerStart) : 'Set Start'"></span>
                         </button>
-                        <button @click="setMarkerEnd()" :disabled="pendingMarkerStart === null">Set End</button>
+                        <button @click="setMarkerEnd()" :disabled="pendingMarkerStart === null" title="Set marker Out point (O)">Set End</button>
                         <button @click="cancelMarkerRange()" class="btn-secondary" x-show="pendingMarkerStart !== null">Cancel</button>
-                        <button @click="addSingleMarker()" class="btn-secondary">Add Marker</button>
+                        <button @click="addSingleMarker()" class="btn-secondary" title="Add single marker (M)">Add Marker</button>
                     </div>
                     <div class="cull-actions">
-                        <button @click="cullSelected('keep')" :class="selectedClip && selectedClip.is_kept ? 'btn-keep active' : 'btn-keep'" title="Keep (K)">✓ Keep</button>
+                        <button @click="cullSelected('keep')" :class="selectedClip && selectedClip.is_kept ? 'btn-keep active' : 'btn-keep'" title="Keep (P)">✓ Keep</button>
                         <button @click="cullSelected('reject')" :class="selectedClip && selectedClip.is_rejected ? 'btn-reject active' : 'btn-reject'" title="Reject (X)">✕ Reject</button>
                         <button @click="cullSelected('clear')" class="btn-secondary" title="Clear rating (U)">Unrated</button>
                     </div>
@@ -252,7 +252,7 @@
                                 :href="'https://www.google.com/maps/search/' + selectedClip.latitude + ',' + selectedClip.longitude + '/@' + selectedClip.latitude + ',' + selectedClip.longitude + ',10z'"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="Open in Google Maps"
+                                title="Open in Google Maps (G)"
                             >🗺</a>
                         </div>
                     </div>
@@ -385,14 +385,19 @@
             <h3>Keyboard Shortcuts</h3>
             <div class="shortcut-grid">
                 <div><kbd>Space</kbd> Play / Pause</div>
-                <div><kbd>J</kbd> / <kbd>L</kbd> Shuttle reverse / forward</div>
-                <div><kbd>P</kbd> Pause shuttle</div>
-                <div><kbd>←</kbd> / <kbd>→</kbd> Step -1s / +1s</div>
+                <div><kbd>J</kbd> / <kbd>K</kbd> / <kbd>L</kbd> Shuttle reverse / pause / forward</div>
+                <div><kbd>←</kbd> / <kbd>→</kbd> Step −1s / +1s</div>
+                <div><kbd>Shift+←</kbd> / <kbd>Shift+→</kbd> Step −5s / +5s</div>
                 <div><kbd>↑</kbd> / <kbd>↓</kbd> Previous / Next clip</div>
-                <div><kbd>K</kbd> Keep selected clip</div>
+                <div><kbd>Home</kbd> Jump to clip start</div>
+                <div><kbd>I</kbd> Set marker In point</div>
+                <div><kbd>O</kbd> Set marker Out point</div>
+                <div><kbd>M</kbd> Add single marker</div>
+                <div><kbd>P</kbd> Pick / Keep selected clip</div>
                 <div><kbd>X</kbd> Reject selected clip</div>
                 <div><kbd>U</kbd> Clear rating</div>
                 <div><kbd>1</kbd>–<kbd>9</kbd> Apply tag from palette</div>
+                <div><kbd>G</kbd> Open location in Google Maps</div>
                 <div><kbd>F</kbd> Toggle focus mode</div>
                 <div><kbd>Esc</kbd> Close preview</div>
                 <div><kbd>A</kbd> Add selected clip to blueprint</div>
