@@ -23,7 +23,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('app', () => ({
         status: 'Ready',
         statusType: 'info',
-        scanPath: '/Users/crs/Desktop/test1/',
+        scanPath: sessionStorage.getItem('sceneflow.scanPath') || '/Users/crs/Desktop/test1/',
         scanning: false,
         scanProgress: 0,
         scanStatusText: '',
@@ -85,6 +85,7 @@ document.addEventListener('alpine:init', () => {
             this.status = 'Connecting…';
             this.statusType = 'info';
 
+            this.$watch('scanPath', val => sessionStorage.setItem('sceneflow.scanPath', val));
             this.initWebSocket();
 
             await this.waitForServer();
