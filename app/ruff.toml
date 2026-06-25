@@ -1,0 +1,24 @@
+line-length = 120
+
+[lint]
+select = [
+    "E",    # pycodestyle errors (trailing whitespace, line too long, etc.)
+    "F",    # pyflakes (unused imports, undefined names, etc.)
+    "W",    # pycodestyle warnings
+    "I",    # isort (import sorting)
+    "UP",   # pyupgrade (modernize syntax)
+    "B",    # bugbear (common bug patterns)
+    "SIM",  # simplify (code simplification suggestions)
+    "RUF",  # ruff-specific rules
+    "ARG",  # unused arguments
+    "PTH",  # path handling (use pathlib over os.path)
+    "PERF", # performance (common performance issues)
+    "A",    # flake8-builtins (shadowing builtins)
+    "T10",  # debugger (leftover debugger statements)
+    "YTT",  # sys.version (incorrect sys.version checks)
+    "DTZ",  # datetime (tzinfo-naive datetime comparisons)
+    "ICN",  # import conventions
+    "FA",   # future annotations
+    "FLY",  # flynt (convert to f-string)
+]
+ignore = []

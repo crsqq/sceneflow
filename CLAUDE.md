@@ -13,6 +13,8 @@ SceneFlow is a video pre-visualization tool — it ingests raw footage, builds l
 uv sync                                                        # install deps
 uv run uvicorn app.main:app --reload --app-dir src             # run dev server (port 8000)
 make lint                                                     # lint Python code with pylint
+make ruff-check                                               # check Python code with ruff
+make ruff-fix                                                 # auto-fix Python code with ruff
 ```
 
 **Frontend / Electron (run from repo root):**

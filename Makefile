@@ -1,7 +1,13 @@
-.PHONY: lint run
+.PHONY: lint ruff-check ruff-fix run
 
 lint:
-	uv run --directory app pylint src/app/
+	cd app && uv run pylint src/app/
+
+ruff-check:
+	cd app && uv run ruff check src/app/
+
+ruff-fix:
+	cd app && uv run ruff check --fix src/app/ && cd app && uv run ruff format src/app/
 
 run:
 	pkill -f "uvicorn app.main:app --port 8000" || true; \

@@ -1,11 +1,14 @@
-from fastapi import WebSocket, WebSocketDisconnect
-import logging
 import json
+import logging
+
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
+
 class TelemetryServer:
     """Manages WebSocket connections and broadcasts event updates to the UI."""
+
     def __init__(self):
         self.active_connections: list[WebSocket] = []
 
@@ -18,11 +21,7 @@ class TelemetryServer:
 
     async def broadcast(self, event: str, data: dict, progress: float = 0.0):
         """Broadcasts a telemetry event to all connected clients."""
-        message = json.dumps({
-            "event": event,
-            "data": data,
-            "progress": progress
-        })
+        message = json.dumps({"event": event, "data": data, "progress": progress})
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)

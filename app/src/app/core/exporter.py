@@ -1,5 +1,6 @@
 from app.core.database import DatabaseManager
 
+
 class StoryboardExporter:
     """Generates Markdown-based storyboards from sequences."""
 
@@ -13,7 +14,7 @@ class StoryboardExporter:
         'full clip' row.
         """
         with self.db_manager.get_session() as session:
-            from app.core.database import Sequence, SequenceItem, MediaClip, ClipMarker
+            from app.core.database import ClipMarker, MediaClip, Sequence, SequenceItem
 
             sequence = session.query(Sequence).filter(Sequence.id == sequence_id).first()
             if not sequence:
@@ -49,10 +50,7 @@ class StoryboardExporter:
                     continue
 
                 markers = (
-                    session.query(ClipMarker)
-                    .filter(ClipMarker.clip_id == clip.id)
-                    .order_by(ClipMarker.timestamp)
-                    .all()
+                    session.query(ClipMarker).filter(ClipMarker.clip_id == clip.id).order_by(ClipMarker.timestamp).all()
                 )
 
                 short_name = clip.short_name or ""

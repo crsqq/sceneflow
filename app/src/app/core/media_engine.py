@@ -1,18 +1,19 @@
-import subprocess
+import asyncio
+import json
 import logging
 import os
-import glob
-import json
 import re
-import asyncio
+import subprocess
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROXY_CONCURRENCY = 3
 
+
 class MediaProcessor:
     """Handles FFmpeg command orchestration and monitoring."""
+
     def __init__(self, project_dir: str | None = None, max_concurrent_proxies: int | None = None):
         self.project_dir = project_dir
         if max_concurrent_proxies is None:
@@ -45,13 +46,13 @@ class MediaProcessor:
 
     async def scan_directory(self, path: str) -> list[dict]:
         """Recursively finds video files and extracts technical metadata."""
-        video_extensions = ('.mp4', '.mov', '.mkv', '.avi')
+        video_extensions = (".mp4", ".mov", ".mkv", ".avi")
         clips = []
 
         def _scan_sync():
             for root, dirs, files in os.walk(path):
                 # Skip .sceneflow directories
-                dirs[:] = [d for d in dirs if d != '.sceneflow']
+                dirs[:] = [d for d in dirs if d != ".sceneflow"]
 
                 for file in files:
                     if file.lower().endswith(video_extensions):
@@ -66,20 +67,17 @@ class MediaProcessor:
     def _get_metadata(self, file_path: str) -> dict | None:
         """Uses ffprobe to extract metadata."""
         try:
-            cmd = [
-                'ffprobe', '-v', 'quiet', '-print_format', 'json',
-                '-show_streams', '-show_format', file_path
-            ]
+            cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", "-show_format", file_path]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
 
             # Find the video stream
-            video_stream = next((s for s in data.get('streams', []) if s['codec_type'] == 'video'), None)
+            video_stream = next((s for s in data.get("streams", []) if s["codec_type"] == "video"), None)
             if not video_stream:
                 return None
 
-            width = int(video_stream.get('width', 0))
-            height = int(video_stream.get('height', 0))
+            width = int(video_stream.get("width", 0))
+            height = int(video_stream.get("height", 0))
 
             exif = self._get_exif_metadata(file_path)
 
@@ -87,13 +85,13 @@ class MediaProcessor:
             longitude = exif.get("longitude")
             srt_detected = False
 
-            if file_path.lower().endswith('.mp4'):
+            if file_path.lower().endswith(".mp4"):
                 srt = self._parse_srt_metadata(file_path)
-                if srt.get('srt_detected'):
+                if srt.get("srt_detected"):
                     srt_detected = True
-                    if srt.get('latitude') is not None:
-                        latitude = srt['latitude']
-                        longitude = srt['longitude']
+                    if srt.get("latitude") is not None:
+                        latitude = srt["latitude"]
+                        longitude = srt["longitude"]
 
             # Determine orientation: check rotation first, then fall back to width/height comparison
             rotation = exif.get("rotation")
@@ -109,14 +107,14 @@ class MediaProcessor:
                 "file_path": file_path,
                 "file_name": os.path.basename(file_path),
                 "resolution": f"{display_width}x{display_height}",
-                "frame_rate": self._parse_fps(video_stream.get('avg_frame_rate', '0/0')),
+                "frame_rate": self._parse_fps(video_stream.get("avg_frame_rate", "0/0")),
                 "orientation": orientation,
                 "recorded_at": exif.get("recorded_at"),
                 "latitude": latitude,
                 "longitude": longitude,
                 "srt_detected": srt_detected,
-                "proxy_path": "", # To be filled later
-                "thumbnail_path": "" # To be filled later
+                "proxy_path": "",  # To be filled later
+                "thumbnail_path": "",  # To be filled later
             }
         except Exception as e:
             logger.error(f"Error extracting metadata for {file_path}: {e}")
@@ -124,7 +122,7 @@ class MediaProcessor:
 
     def _parse_fps(self, fps_str: str) -> float:
         try:
-            num, den = map(int, fps_str.split('/'))
+            num, den = map(int, fps_str.split("/"))
             return num / den if den != 0 else 0.0
         except (ValueError, ZeroDivisionError):
             return 0.0
@@ -137,10 +135,7 @@ class MediaProcessor:
         """
         result = {"recorded_at": None, "latitude": None, "longitude": None, "rotation": None}
         try:
-            cmd = [
-                'exiftool', '-time:CreateDate', '-GPSLatitude', '-GPSLongitude', '-Rotation',
-                '-n', '-j', file_path
-            ]
+            cmd = ["exiftool", "-time:CreateDate", "-GPSLatitude", "-GPSLongitude", "-Rotation", "-n", "-j", file_path]
             proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(proc.stdout)
             logger.info(f"exiftool JSON output for {file_path}: {proc.stdout}")
@@ -148,23 +143,23 @@ class MediaProcessor:
                 return result
             entry = data[0]
 
-            create_date = entry.get('CreateDate')
+            create_date = entry.get("CreateDate")
             if create_date:
                 try:
-                    result['recorded_at'] = datetime.strptime(create_date, '%Y:%m:%d %H:%M:%S')
+                    result["recorded_at"] = datetime.strptime(create_date, "%Y:%m:%d %H:%M:%S")
                 except ValueError:
                     logger.warning(f"Could not parse CreateDate '{create_date}' for {file_path}")
 
-            lat = entry.get('GPSLatitude')
-            lon = entry.get('GPSLongitude')
+            lat = entry.get("GPSLatitude")
+            lon = entry.get("GPSLongitude")
             if lat is not None:
-                result['latitude'] = float(lat)
+                result["latitude"] = float(lat)
             if lon is not None:
-                result['longitude'] = float(lon)
+                result["longitude"] = float(lon)
 
-            rotation = entry.get('Rotation')
+            rotation = entry.get("Rotation")
             if rotation is not None:
-                result['rotation'] = int(rotation)
+                result["rotation"] = int(rotation)
                 logger.info(f"Rotation for {file_path}: {rotation}")
             else:
                 logger.info(f"No rotation found for {file_path}")
@@ -172,35 +167,34 @@ class MediaProcessor:
             logger.error(f"Error extracting exif metadata for {file_path}: {e}")
         return result
 
-    _SRT_COORD_RE = re.compile(r'\[latitude:\s*([-\d.]+)\]\s*\[longitude:\s*([-\d.]+)\]')
+    _SRT_COORD_RE = re.compile(r"\[latitude:\s*([-\d.]+)\]\s*\[longitude:\s*([-\d.]+)\]")
 
     def _parse_srt_metadata(self, file_path: str) -> dict:
         """Check for a DJI-style .SRT sidecar next to an .MP4 and extract the first GPS fix."""
         base = os.path.splitext(file_path)[0]
         srt_path = None
-        for candidate in (base + '.SRT', base + '.srt'):
+        for candidate in (base + ".SRT", base + ".srt"):
             if os.path.isfile(candidate):
                 srt_path = candidate
                 break
         if srt_path is None:
             return {}
         try:
-            with open(srt_path, 'r', encoding='utf-8', errors='replace') as f:
+            with open(srt_path, encoding="utf-8", errors="replace") as f:
                 for line in f:
                     m = self._SRT_COORD_RE.search(line)
                     if m:
                         return {
-                            'srt_detected': True,
-                            'latitude': float(m.group(1)),
-                            'longitude': float(m.group(2)),
+                            "srt_detected": True,
+                            "latitude": float(m.group(1)),
+                            "longitude": float(m.group(2)),
                         }
         except Exception as e:
             logger.warning(f"Could not read SRT sidecar {srt_path}: {e}")
-        return {'srt_detected': True}
+        return {"srt_detected": True}
 
     async def generate_proxy(self, clip_id: str, source_path: str, db_manager, telemetry) -> None:
         """Background task using FFmpeg to create low-res proxies and a poster thumbnail."""
-        import asyncio
         async with self.proxy_semaphore:
             await self._generate_proxy_inner(clip_id, source_path, db_manager, telemetry)
 
@@ -232,35 +226,52 @@ class MediaProcessor:
             # FFmpeg command for low-res proxy (e.g., 720p, h264)
             # Use swapped dimensions for rotation 90
             if rotation == 90:
-                proxy_scale = 'scale=720:-2'
-                thumb_scale = 'scale=-2:320'
+                proxy_scale = "scale=720:-2"
+                thumb_scale = "scale=-2:320"
             else:
-                proxy_scale = 'scale=-2:720'
-                thumb_scale = 'scale=320:-2'
+                proxy_scale = "scale=-2:720"
+                thumb_scale = "scale=320:-2"
 
             proxy_cmd = [
-                'ffmpeg', '-y', '-i', source_path,
-                '-vf', proxy_scale,
-                '-c:v', 'libx264', '-preset', 'veryfast',
-                '-crf', '28', '-c:a', 'aac', '-b:a', '128k',
-                proxy_path
+                "ffmpeg",
+                "-y",
+                "-i",
+                source_path,
+                "-vf",
+                proxy_scale,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "28",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                proxy_path,
             ]
 
             # Thumbnail: single frame at 1s or 0.5s if shorter, scaled to 320px width
             thumb_cmd = [
-                'ffmpeg', '-y', '-i', source_path,
-                '-ss', '00:00:01.000',
-                '-vframes', '1',
-                '-vf', thumb_scale,
-                '-q:v', '2',
-                thumbnail_path
+                "ffmpeg",
+                "-y",
+                "-i",
+                source_path,
+                "-ss",
+                "00:00:01.000",
+                "-vframes",
+                "1",
+                "-vf",
+                thumb_scale,
+                "-q:v",
+                "2",
+                thumbnail_path,
             ]
 
             # Use asyncio.create_subprocess_exec for non-blocking execution
             proxy_process = await asyncio.create_subprocess_exec(
-                *proxy_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *proxy_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             _proxy_stdout, proxy_stderr = await proxy_process.communicate()
 
@@ -270,9 +281,7 @@ class MediaProcessor:
             # Generate thumbnail (best-effort; don't fail proxy if thumbnail fails)
             try:
                 thumb_process = await asyncio.create_subprocess_exec(
-                    *thumb_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    *thumb_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
                 _thumb_stdout, thumb_stderr = await thumb_process.communicate()
                 if thumb_process.returncode != 0:
@@ -284,6 +293,7 @@ class MediaProcessor:
 
             # 2. Update database
             from app.core.database import MediaClip
+
             with db_manager.get_session() as session:
                 clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
                 if clip:
@@ -315,10 +325,7 @@ class MediaProcessor:
         await self._reset_queue_counters(len(jobs))
         file_name_map = {clip_id: os.path.basename(path) for clip_id, path in jobs}
 
-        await telemetry.broadcast(
-            "proxy_queue_started",
-            {"total": len(jobs)}
-        )
+        await telemetry.broadcast("proxy_queue_started", {"total": len(jobs)})
 
         async def _run_one(clip_id: str, source_path: str):
             try:
@@ -332,7 +339,7 @@ class MediaProcessor:
                         "failed": failed,
                         "current_file": file_name_map.get(clip_id, ""),
                     },
-                    progress=round(completed / max(total, 1) * 100, 1)
+                    progress=round(completed / max(total, 1) * 100, 1),
                 )
             except Exception:
                 completed, total, failed = await self._mark_done(failed=True)
@@ -344,12 +351,11 @@ class MediaProcessor:
                         "failed": failed,
                         "current_file": file_name_map.get(clip_id, ""),
                     },
-                    progress=round(completed / max(total, 1) * 100, 1)
+                    progress=round(completed / max(total, 1) * 100, 1),
                 )
 
         await asyncio.gather(*(_run_one(clip_id, path) for clip_id, path in jobs))
 
         await telemetry.broadcast(
-            "proxy_queue_complete",
-            {"total": len(jobs), "completed": self._completed, "failed": self._failed}
+            "proxy_queue_complete", {"total": len(jobs), "completed": self._completed, "failed": self._failed}
         )
