@@ -56,6 +56,18 @@ To start the Electron application:
 npm start
 ```
 
+## Running the App
+
+The simplest way to start the full application is via the Makefile:
+
+```bash
+make run
+```
+
+This kills any existing backend process, starts the Electron shell, and Electron automatically spawns the Python sidecar.
+
+Alternatively, you can start the backend and frontend separately (see Quick Start and Manual Setup above).
+
 ## Project Structure
 
 - `app/`: FastAPI backend service.
