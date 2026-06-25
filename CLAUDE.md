@@ -12,6 +12,7 @@ SceneFlow is a video pre-visualization tool — it ingests raw footage, builds l
 ```sh
 uv sync                                                        # install deps
 uv run uvicorn app.main:app --reload --app-dir src             # run dev server (port 8000)
+make lint                                                     # lint Python code with pylint
 ```
 
 **Frontend / Electron (run from repo root):**
@@ -26,7 +27,7 @@ npm run build  # package with electron-builder
 ./scripts/setup_env.sh
 ```
 
-There are no automated tests or lint commands configured yet.
+There are no automated tests configured yet.
 
 ## Architecture
 

@@ -1,0 +1,39 @@
+[MASTER]
+
+[MESSAGES CONTROL]
+disable=
+    missing-docstring,
+    too-few-public-methods,
+    invalid-name,
+    fixme,
+    wrong-import-order,
+    wrong-import-position,
+    ungrouped-imports,
+    redefined-outer-name,
+    reimported,
+    import-outside-toplevel,
+    import-self,
+    logging-fstring-interpolation,
+    broad-exception-caught,
+    broad-exception-raised,
+    too-many-locals,
+    too-many-branches,
+    too-many-arguments,
+    too-many-statements,
+    no-else-return,
+    unnecessary-pass,
+    unused-import,
+    too-many-ancestors,
+    c-extension-no-member,
+
+[BASIC]
+max-line-length=120
+good-names=db_,_,i,j,k
+
+[DESIGN]
+max-args=10
+max-attributes=10
+min-public-methods=0
+
+[TYPECHECK]
+ignored-modules=ffmpeg
