@@ -306,11 +306,7 @@ async def scan_directory(request: ScanRequest):
     proxy_jobs: list[tuple[str, str]] = []
 
     for idx, data in enumerate(clips_data):
-        await telemetry.broadcast(
-            "scan_progress",
-            {"processed": idx + 1, "total": total, "current_file": data["file_name"]},
-            progress=round((idx + 1) / max(total, 1) * 100, 1),
-        )
+        new_clip_dict = None
         # Check if clip already exists to avoid duplicates
         with db_manager.get_session() as session:
             existing = session.query(MediaClip).filter(MediaClip.file_path == data["file_path"]).first()
@@ -334,12 +330,40 @@ async def scan_directory(request: ScanRequest):
                 new_clips_count += 1
                 clip_id = new_clip.id
                 logger.info("Added clip: %s (%s)", data["file_name"], data["resolution"])
+                tags = []
                 if data.get("srt_detected"):
                     db_manager.add_tag(clip_id, "technical", "Drone")
+                    tags = [{"tag_type": "technical", "value": "Drone"}]
+                new_clip_dict = {
+                    "id": new_clip.id,
+                    "file_path": new_clip.file_path,
+                    "file_name": new_clip.file_name,
+                    "short_name": new_clip.short_name,
+                    "resolution": new_clip.resolution,
+                    "frame_rate": new_clip.frame_rate,
+                    "orientation": new_clip.orientation,
+                    "recorded_at": new_clip.recorded_at.isoformat() if new_clip.recorded_at else None,
+                    "latitude": new_clip.latitude,
+                    "longitude": new_clip.longitude,
+                    "proxy_path": new_clip.proxy_path,
+                    "thumbnail_path": new_clip.thumbnail_path,
+                    "is_kept": new_clip.is_kept,
+                    "is_rejected": new_clip.is_rejected,
+                    "tags": tags,
+                }
             else:
                 skipped_clips_count += 1
                 clip_id = None
                 logger.info("Skipped duplicate: %s", data["file_name"])
+
+        event_data = {"processed": idx + 1, "total": total, "current_file": data["file_name"]}
+        if new_clip_dict:
+            event_data["new_clip"] = new_clip_dict
+        await telemetry.broadcast(
+            "scan_progress",
+            event_data,
+            progress=round((idx + 1) / max(total, 1) * 100, 1),
+        )
 
         if clip_id:
             proxy_jobs.append((clip_id, data["file_path"]))

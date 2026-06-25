@@ -85,21 +85,30 @@ document.addEventListener('alpine:init', () => {
             this.status = 'Connecting…';
             this.statusType = 'info';
 
-            // Setup WebSocket for telemetry
-            const ws = new WebSocket('ws://localhost:8000/ws');
-            ws.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                console.log('Telemetry event:', msg);
-                this.handleTelemetry(msg);
-            };
-            ws.onopen = () => console.log('WebSocket connected');
-            ws.onclose = () => console.log('WebSocket disconnected');
+            this.initWebSocket();
 
             await this.waitForServer();
             await this.fetchClips();
             await this.fetchSequences();
             this.status = 'Ready';
             this.statusType = 'info';
+        },
+
+        initWebSocket() {
+            const ws = new WebSocket('ws://localhost:8000/ws');
+            ws.onopen = () => console.log('WebSocket connected');
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    console.log('Telemetry event:', msg);
+                    this.handleTelemetry(msg);
+                } catch (_) {}
+            };
+            ws.onerror = (e) => console.error('WebSocket error', e);
+            ws.onclose = () => {
+                console.log('WebSocket closed, reconnecting in 2s…');
+                setTimeout(() => this.initWebSocket(), 2000);
+            };
         },
 
         async waitForServer(maxAttempts = 20, delayMs = 300) {
@@ -121,6 +130,9 @@ document.addEventListener('alpine:init', () => {
             } else if (msg.event === 'scan_progress') {
                 this.scanProgress = msg.progress || 0;
                 this.scanStatusText = `${msg.data.processed} / ${msg.data.total} · ${msg.data.current_file || ''}`;
+                if (msg.data.new_clip) {
+                    this.clips.push(msg.data.new_clip);
+                }
             } else if (msg.event === 'scan_complete') {
                 this.scanning = false;
                 this.scanProgress = 100;
@@ -129,7 +141,7 @@ document.addEventListener('alpine:init', () => {
                 this.showToast(`Scan complete · ${msg.data.new_clips} new clips`, 'success');
                 this.fetchClips();
                 this.fetchSequences();
-                setTimeout(() => { this.status = 'Ready'; this.statusType = 'info'; }, 4000);
+                setTimeout(() => { if (!this.proxyQueueActive) { this.status = 'Ready'; this.statusType = 'info'; } }, 4000);
             } else if (msg.event === 'clip_updated') {
                 this.fetchClips();
             } else if (msg.event === 'sequence_updated') {
@@ -625,9 +637,17 @@ document.addEventListener('alpine:init', () => {
                 this.status = `Scan complete · ${result.new_clips} new · ${result.skipped_clips || 0} skipped`;
                 this.statusType = 'success';
                 this.showToast(`Scan complete · ${result.new_clips} new clips`, 'success');
+                if (result.new_clips > 0) {
+                    this.proxyQueueActive = true;
+                    this.proxyQueueTotal = result.new_clips;
+                    this.proxyQueueProcessed = 0;
+                    this.proxyQueueFailed = 0;
+                    this.status = `Preparing previews · 0 / ${result.new_clips}`;
+                    this.statusType = 'info';
+                }
                 await this.fetchClips();
                 await this.fetchSequences();
-                setTimeout(() => { this.status = 'Ready'; this.statusType = 'info'; }, 4000);
+                setTimeout(() => { if (!this.proxyQueueActive) { this.status = 'Ready'; this.statusType = 'info'; } }, 4000);
             } catch (error) {
                 console.error('Error during scan:', error);
                 this.scanning = false;

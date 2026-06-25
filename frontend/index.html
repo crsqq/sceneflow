@@ -67,7 +67,7 @@
             </div>
             <!-- Scan progress -->
             <div class="scan-progress" x-show="scanning">
-                <div class="progress-track">
+                <div class="progress-track" :class="{'discovering': scanning && scanProgress === 0}">
                     <div class="progress-fill" :style="'width: ' + scanProgress + '%'"></div>
                 </div>
                 <span class="progress-text" x-text="scanStatusText"></span>
@@ -166,10 +166,7 @@
                                 <template x-if="proxyStatuses[clip.id] === 'generating'">
                                     <span class="badge badge-info">Proxy…</span>
                                 </template>
-                                <template x-if="proxyStatuses[clip.id] === 'completed'">
-                                    <span class="badge badge-success">Ready</span>
-                                </template>
-                                <template x-if="proxyStatuses[clip.id] === 'failed'">
+<template x-if="proxyStatuses[clip.id] === 'failed'">
                                     <span class="badge badge-error">Proxy failed</span>
                                 </template>
                             </div>
