@@ -106,7 +106,12 @@ class DatabaseManager:
                     clip.is_rejected = is_rejected
                 session.commit()
 
-    def update_clip_metadata(self, clip_id: str, short_name: str | None = None, recorded_at: datetime | None = None, latitude: float | None = None, longitude: float | None = None):
+    def update_clip_metadata(
+        self, clip_id: str, short_name: str | None = None,
+        recorded_at: datetime | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+    ):
         with self.get_session() as session:
             clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
             if clip:
@@ -232,7 +237,11 @@ class DatabaseManager:
         with self.get_session() as session:
             from app.core.database import ClipMarker
             markers = session.query(ClipMarker).filter(ClipMarker.clip_id == clip_id).all()
-            return [{"id": m.id, "timestamp": m.timestamp, "end_timestamp": m.end_timestamp, "note": m.note} for m in markers]
+            return [
+                {"id": m.id, "timestamp": m.timestamp,
+                 "end_timestamp": m.end_timestamp, "note": m.note}
+                for m in markers
+            ]
 
     def remove_marker(self, marker_id: str):
         with self.get_session() as session:
@@ -271,32 +280,32 @@ class DatabaseManager:
     def query_clips(self, query_string: str):
         """
         Query clips using a JQL-like query string.
-        
+
         Args:
             query_string: The query string to parse and execute
-            
+
         Returns:
             List of clip dictionaries matching the query, or help text if query is "/help"
         """
         from app.core.query_parser import parse_query, ComparisonNode, LogicalNode, InNode
-        
+
         # Check for help command
         if query_string.strip().lower() == '/help':
             return {"help": parse_query(query_string)}
-        
+
         try:
             # Parse the query
             ast = parse_query(query_string)
         except ValueError as e:
             return {"error": str(e)}
-        
+
         with self.get_session() as session:
             # Build SQLAlchemy query
             query = session.query(MediaClip)
-            
+
             # Apply filters from AST
             query = self._apply_filters(query, ast, session)
-            
+
             # Execute and format results
             clips = query.all()
             results = []
@@ -320,11 +329,11 @@ class DatabaseManager:
                 }
                 results.append(clip_dict)
             return results
-    
+
     def _apply_filters(self, query, node, session):
         """Recursively apply filters from AST nodes to SQLAlchemy query."""
         from app.core.query_parser import ComparisonNode, LogicalNode, InNode
-        
+
         if isinstance(node, ComparisonNode):
             return self._apply_comparison(query, node)
         elif isinstance(node, LogicalNode):
@@ -336,15 +345,15 @@ class DatabaseManager:
             return self._apply_in(query, node)
         else:
             raise ValueError(f"Unknown node type: {type(node)}")
-    
+
     def _apply_comparison(self, query, node: ComparisonNode):
         """Apply a comparison filter to the query."""
         field = getattr(MediaClip, node.field, None)
         if field is None:
             raise ValueError(f"Unknown field: {node.field}")
-        
+
         value = node.value
-        
+
         # Handle different operators
         if node.operator == '=':
             query = query.filter(field == value)
@@ -360,9 +369,9 @@ class DatabaseManager:
             query = query.filter(field <= value)
         else:
             raise ValueError(f"Unknown operator: {node.operator}")
-        
+
         return query
-    
+
     def _apply_in(self, query, node: InNode):
         """Apply an IN or NOT IN filter to the query."""
         if node.field == 'tags':
@@ -390,10 +399,10 @@ class DatabaseManager:
             field = getattr(MediaClip, node.field, None)
             if field is None:
                 raise ValueError(f"Unknown field: {node.field}")
-            
+
             if node.operator == 'IN':
                 query = query.filter(field.in_(node.values))
             elif node.operator == 'NOT IN':
                 query = query.filter(~field.in_(node.values))
-        
+
         return query

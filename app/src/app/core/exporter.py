@@ -2,7 +2,7 @@ from app.core.database import DatabaseManager
 
 class StoryboardExporter:
     """Generates Markdown-based storyboards from sequences."""
-    
+
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
@@ -24,7 +24,13 @@ class StoryboardExporter:
             md += "| Position | File Name | Short Name | Orientation | Resolution | Section | Note |\n"
             md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
 
-            items = session.query(SequenceItem).filter(SequenceItem.sequence_id == sequence_id).order_by(SequenceItem.position).all()
+            # pylint: disable=duplicate-code
+            items = (
+                session.query(SequenceItem)
+                .filter(SequenceItem.sequence_id == sequence_id)
+                .order_by(SequenceItem.position)
+                .all()
+            )
 
             if not items:
                 md += "| - | No clips in sequence | - | - | - | - |\n"
@@ -54,11 +60,19 @@ class StoryboardExporter:
                     for marker in markers:
                         section = _format_section(marker.timestamp, marker.end_timestamp)
                         note = marker.note or item.notes or ""
-                        md += f"| {item.position} | {clip.file_name} | {short_name} | {clip.orientation or '-'} | {clip.resolution or '-'} | {section} | {note} |\n"
+                        md += (
+                            f"| {item.position} | {clip.file_name} | {short_name} "
+                            f"| {clip.orientation or '-'} | {clip.resolution or '-'} "
+                            f"| {section} | {note} |\n"
+                        )
                 else:
                     section = "full clip"
                     note = item.notes or ""
-                    md += f"| {item.position} | {clip.file_name} | {short_name} | {clip.orientation or '-'} | {clip.resolution or '-'} | {section} | {note} |\n"
+                    md += (
+                        f"| {item.position} | {clip.file_name} | {short_name} "
+                        f"| {clip.orientation or '-'} | {clip.resolution or '-'} "
+                        f"| {section} | {note} |\n"
+                    )
 
             return md
 

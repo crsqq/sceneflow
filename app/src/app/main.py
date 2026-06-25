@@ -29,7 +29,8 @@ media_processor = MediaProcessor()
 
 def set_project(project_dir: str):
     """Switch the global database and media processor to the given project root."""
-    global db_manager, media_processor
+    # pylint: disable=global-statement
+    global db_manager
     db_manager = DatabaseManager.for_project_dir(project_dir)
     media_processor.set_project_dir(project_dir)
     db_manager.init_db()
@@ -72,11 +73,11 @@ async def root():
 async def get_clips(query: str = None):
     if db_manager is None:
         return []
-    
+
     if query:
         result = db_manager.query_clips(query)
         return result
-    
+
     return db_manager.get_all_clips_with_tags()
 
 @app.get("/proxy/{clip_id}")
@@ -114,7 +115,10 @@ async def cull_clip(clip_id: str, request: CullRequest):
     if db_manager is None:
         raise HTTPException(status_code=503, detail="No project opened")
     db_manager.update_clip_status(clip_id, is_kept=request.is_kept, is_rejected=request.is_rejected)
-    await telemetry.broadcast("clip_updated", {"clip_id": clip_id, "is_kept": request.is_kept, "is_rejected": request.is_rejected})
+    await telemetry.broadcast(
+        "clip_updated",
+        {"clip_id": clip_id, "is_kept": request.is_kept, "is_rejected": request.is_rejected},
+    )
     return {"status": "updated"}
 
 @app.post("/clips/{clip_id}/tags")
@@ -164,8 +168,8 @@ async def update_clip_metadata(clip_id: str, request: ClipMetadataRequest):
     if request.recorded_at:
         try:
             recorded_at = datetime.fromisoformat(request.recorded_at)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid recorded_at format")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid recorded_at format") from exc
 
     db_manager.update_clip_metadata(
         clip_id,

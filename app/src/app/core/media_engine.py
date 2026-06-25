@@ -161,7 +161,7 @@ class MediaProcessor:
                 result['latitude'] = float(lat)
             if lon is not None:
                 result['longitude'] = float(lon)
-            
+
             rotation = entry.get('Rotation')
             if rotation is not None:
                 result['rotation'] = int(rotation)
@@ -228,7 +228,7 @@ class MediaProcessor:
             # Check for rotation to adjust scale filter
             exif = self._get_exif_metadata(source_path)
             rotation = exif.get("rotation")
-            
+
             # FFmpeg command for low-res proxy (e.g., 720p, h264)
             # Use swapped dimensions for rotation 90
             if rotation == 90:
@@ -237,7 +237,7 @@ class MediaProcessor:
             else:
                 proxy_scale = 'scale=-2:720'
                 thumb_scale = 'scale=320:-2'
-            
+
             proxy_cmd = [
                 'ffmpeg', '-y', '-i', source_path,
                 '-vf', proxy_scale,
@@ -262,7 +262,7 @@ class MediaProcessor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            proxy_stdout, proxy_stderr = await proxy_process.communicate()
+            _proxy_stdout, proxy_stderr = await proxy_process.communicate()
 
             if proxy_process.returncode != 0:
                 raise Exception(f"FFmpeg proxy error: {proxy_stderr.decode()}")
@@ -274,7 +274,7 @@ class MediaProcessor:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                thumb_stdout, thumb_stderr = await thumb_process.communicate()
+                _thumb_stdout, thumb_stderr = await thumb_process.communicate()
                 if thumb_process.returncode != 0:
                     logger.warning(f"Thumbnail generation failed for {source_path}: {thumb_stderr.decode()}")
                     thumbnail_path = ""
@@ -292,7 +292,14 @@ class MediaProcessor:
                         clip.thumbnail_path = thumbnail_path
                     session.commit()
 
-            await telemetry.broadcast("proxy_completed", {"clip_id": clip_id, "proxy_path": proxy_path, "thumbnail_path": thumbnail_path})
+            await telemetry.broadcast(
+                "proxy_completed",
+                {
+                    "clip_id": clip_id,
+                    "proxy_path": proxy_path,
+                    "thumbnail_path": thumbnail_path,
+                },
+            )
             logger.info(f"Proxy generated successfully: {proxy_path}")
 
         except Exception as e:
