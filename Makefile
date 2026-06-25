@@ -1,4 +1,4 @@
-.PHONY: lint ruff-check ruff-fix run
+.PHONY: lint ruff-check ruff-fix run test
 
 lint:
 	cd app && uv run pylint src/app/
@@ -12,3 +12,6 @@ ruff-fix:
 run:
 	pkill -f "uvicorn app.main:app --port 8000" || true; \
 	ELECTRON_ENABLE_LOGGING=1 npm start
+
+test:
+	cd app && uv run --group dev pytest
