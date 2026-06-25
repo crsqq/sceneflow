@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -13,7 +14,14 @@ from app.core.exporter import StoryboardExporter
 from app.core.media_engine import MediaProcessor
 from app.core.telemetry import TelemetryServer
 
-app = FastAPI(title="SceneFlow API")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Database is initialized lazily when the first scan/project is opened.
+    yield
+
+
+app = FastAPI(title="SceneFlow API", lifespan=lifespan)
 
 # Enable CORS for Electron frontend
 app.add_middleware(
@@ -25,7 +33,7 @@ app.add_middleware(
 )
 
 # Global instances for simplicity in MVP
-db_manager: DatabaseManager | None = None
+db_manager: DatabaseManager | None = None  # pylint: disable=invalid-name
 telemetry = TelemetryServer()
 media_processor = MediaProcessor()
 _background_tasks: set[asyncio.Task] = set()
@@ -71,12 +79,6 @@ class ReorderRequest(BaseModel):
     item_ids: list[str]
 
 
-@app.on_event("startup")
-async def startup_event():
-    # Database is initialized lazily when the first scan/project is opened.
-    pass
-
-
 @app.get("/")
 async def root():
     return {"message": "SceneFlow API is running"}
@@ -109,8 +111,6 @@ async def get_proxy(clip_id: str):
     if db_manager is None:
         raise HTTPException(status_code=503, detail="No project opened")
     with db_manager.get_session() as session:
-        from app.core.database import MediaClip
-
         clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
         if not clip or not clip.proxy_path:
             raise HTTPException(status_code=404, detail="Proxy not found")
@@ -122,8 +122,6 @@ async def get_thumbnail(clip_id: str):
     if db_manager is None:
         raise HTTPException(status_code=503, detail="No project opened")
     with db_manager.get_session() as session:
-        from app.core.database import MediaClip
-
         clip = session.query(MediaClip).filter(MediaClip.id == clip_id).first()
         if not clip or not clip.thumbnail_path or not Path(clip.thumbnail_path).exists():
             raise HTTPException(status_code=404, detail="Thumbnail not found")

@@ -292,7 +292,7 @@ class MediaProcessor:
             _proxy_stdout, proxy_stderr = await proxy_process.communicate()
 
             if proxy_process.returncode != 0:
-                raise Exception(f"FFmpeg proxy error: {proxy_stderr.decode()}")
+                raise RuntimeError(f"FFmpeg proxy error: {proxy_stderr.decode()}")
 
             # Generate thumbnail (best-effort; don't fail proxy if thumbnail fails)
             try:

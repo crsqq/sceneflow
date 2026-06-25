@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 if TYPE_CHECKING:
     from app.core.query_parser import ComparisonNode, InNode
@@ -73,7 +72,7 @@ class DatabaseManager:
 
     def __init__(self, db_url: str = "sqlite:///./sceneflow.db"):
         self.engine = create_engine(db_url, connect_args={"check_same_thread": False})
-        self.SessionFactory = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.session_factory = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     @classmethod
     def for_project_dir(cls, project_dir: str) -> DatabaseManager:
@@ -89,7 +88,7 @@ class DatabaseManager:
 
     def get_session(self) -> Session:
         """Returns a new session."""
-        return self.SessionFactory()
+        return self.session_factory()
 
     def add_clip(self, clip: MediaClip):
         with self.get_session() as session:
@@ -244,8 +243,6 @@ class DatabaseManager:
 
     def add_marker(self, clip_id: str, timestamp: float, end_timestamp: float | None = None, note: str | None = None):
         with self.get_session() as session:
-            from app.core.database import ClipMarker
-
             marker = ClipMarker(clip_id=clip_id, timestamp=timestamp, end_timestamp=end_timestamp, note=note)
             session.add(marker)
             session.commit()
@@ -254,8 +251,6 @@ class DatabaseManager:
 
     def get_markers(self, clip_id: str):
         with self.get_session() as session:
-            from app.core.database import ClipMarker
-
             markers = session.query(ClipMarker).filter(ClipMarker.clip_id == clip_id).all()
             return [
                 {"id": m.id, "timestamp": m.timestamp, "end_timestamp": m.end_timestamp, "note": m.note}
@@ -264,8 +259,6 @@ class DatabaseManager:
 
     def remove_marker(self, marker_id: str):
         with self.get_session() as session:
-            from app.core.database import ClipMarker
-
             marker = session.query(ClipMarker).filter(ClipMarker.id == marker_id).first()
             if marker:
                 session.delete(marker)
@@ -273,11 +266,9 @@ class DatabaseManager:
 
     def get_clips_for_directory(self, directory: str):
         """Returns clips whose file_path falls under the given directory."""
-        clean = directory.rstrip('/')
+        clean = directory.rstrip("/")
         with self.get_session() as session:
-            clips = session.query(MediaClip).filter(
-                MediaClip.file_path.like(f"{clean}/%")
-            ).all()
+            clips = session.query(MediaClip).filter(MediaClip.file_path.like(f"{clean}/%")).all()
             results = []
             for clip in clips:
                 clip_dict = {
