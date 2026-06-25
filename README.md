@@ -1,6 +1,12 @@
 # SceneFlow
 
-SceneFlow is an MVP for managing scene flows. It uses a FastAPI backend and an Electron-based frontend.
+## What it's for
+
+You come back from a shoot with hundreds of clips. Before you touch an NLE, you need to answer two questions: which clips are worth keeping, and what order do they go in? Doing that inside Premiere or Resolve means importing everything, waiting for proxies, and fighting a tool built for editing rather than selecting.
+
+SceneFlow handles only this pre-edit phase. Point it at a folder, it scans and builds low-res proxies in the background, and you get a fast keyboard-driven interface for culling (keep/reject), tagging shot types, and assembling a rough sequence — the blueprint. When you're done, you export a Markdown storyboard that describes exactly what to pull into the NLE and in what order.
+
+The source files are never touched. Everything SceneFlow generates — proxies, thumbnails, the database — goes into a `.sceneflow/` folder next to your footage.
 
 ## Prerequisites
 
