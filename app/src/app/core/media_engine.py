@@ -100,7 +100,7 @@ class MediaProcessor:
 
             # Determine orientation: check rotation first, then fall back to width/height comparison
             rotation = exif.get("rotation")
-            if rotation == 90:
+            if rotation == 90 or rotation == 270:
                 orientation = "portrait"
                 # Swap width/height for rotated videos
                 display_width, display_height = height, width
