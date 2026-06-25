@@ -1,4 +1,4 @@
-.PHONY: build-deps lint ruff-check ruff-fix run test
+.PHONY: build-deps lint ruff-check ruff-fix run test pkill
 
 build-deps:
 	cd app && uv sync
@@ -19,3 +19,6 @@ run:
 
 test:
 	cd app && uv run --group dev pytest
+
+pkill:
+	pkill -f "uvicorn app.main:app --port 8000"

@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import subprocess
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -82,6 +83,7 @@ class MediaProcessor:
 
             exif = self._get_exif_metadata(file_path)
 
+            recorded_at = exif.get("recorded_at")
             latitude = exif.get("latitude")
             longitude = exif.get("longitude")
             srt_detected = False
@@ -93,6 +95,8 @@ class MediaProcessor:
                     if srt.get("latitude") is not None:
                         latitude = srt["latitude"]
                         longitude = srt["longitude"]
+                    if srt.get("recorded_at") is not None:
+                        recorded_at = srt["recorded_at"]
 
             # Determine orientation: check rotation first, then fall back to width/height comparison
             rotation = exif.get("rotation")
@@ -110,7 +114,7 @@ class MediaProcessor:
                 "resolution": f"{display_width}x{display_height}",
                 "frame_rate": self._parse_fps(video_stream.get("avg_frame_rate", "0/0")),
                 "orientation": orientation,
-                "recorded_at": exif.get("recorded_at"),
+                "recorded_at": recorded_at,
                 "latitude": latitude,
                 "longitude": longitude,
                 "srt_detected": srt_detected,
@@ -169,27 +173,38 @@ class MediaProcessor:
         return result
 
     _SRT_COORD_RE = re.compile(r"\[latitude:\s*([-\d.]+)\]\s*\[longitude:\s*([-\d.]+)\]")
+    _SRT_DT_RE = re.compile(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 
     def _parse_srt_metadata(self, file_path: str) -> dict:
-        """Check for a DJI-style .SRT sidecar next to an .MP4 and extract the first GPS fix."""
-        base = Path(file_path).stem
+        """Check for a DJI-style .SRT sidecar next to an .MP4 and extract the first GPS fix and datetime."""
+        parent = Path(file_path).parent
+        stem = Path(file_path).stem
         srt_path = None
-        for candidate in (base + ".SRT", base + ".srt"):
-            if Path(candidate).is_file():
+        for candidate in (parent / (stem + ".SRT"), parent / (stem + ".srt")):
+            if candidate.is_file():
                 srt_path = candidate
                 break
         if srt_path is None:
             return {}
         try:
+            recorded_at = None
             with Path(srt_path).open(encoding="utf-8", errors="replace") as f:
                 for line in f:
+                    if recorded_at is None:
+                        m_dt = self._SRT_DT_RE.search(line)
+                        if m_dt:
+                            with suppress(ValueError):
+                                recorded_at = datetime.strptime(m_dt.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
                     m = self._SRT_COORD_RE.search(line)
                     if m:
                         return {
                             "srt_detected": True,
+                            "recorded_at": recorded_at,
                             "latitude": float(m.group(1)),
                             "longitude": float(m.group(2)),
                         }
+            if recorded_at is not None:
+                return {"srt_detected": True, "recorded_at": recorded_at}
         except OSError as e:
             logger.warning("Could not read SRT sidecar %s: %s", srt_path, e)
         return {"srt_detected": True}
