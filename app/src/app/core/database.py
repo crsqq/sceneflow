@@ -271,6 +271,35 @@ class DatabaseManager:
                 session.delete(marker)
                 session.commit()
 
+    def get_clips_for_directory(self, directory: str):
+        """Returns clips whose file_path falls under the given directory."""
+        clean = directory.rstrip('/')
+        with self.get_session() as session:
+            clips = session.query(MediaClip).filter(
+                MediaClip.file_path.like(f"{clean}/%")
+            ).all()
+            results = []
+            for clip in clips:
+                clip_dict = {
+                    "id": clip.id,
+                    "file_path": clip.file_path,
+                    "file_name": clip.file_name,
+                    "short_name": clip.short_name,
+                    "resolution": clip.resolution,
+                    "frame_rate": clip.frame_rate,
+                    "orientation": clip.orientation,
+                    "recorded_at": clip.recorded_at.isoformat() if clip.recorded_at else None,
+                    "latitude": clip.latitude,
+                    "longitude": clip.longitude,
+                    "proxy_path": clip.proxy_path,
+                    "thumbnail_path": clip.thumbnail_path,
+                    "is_kept": clip.is_kept,
+                    "is_rejected": clip.is_rejected,
+                    "tags": [{"id": t.id, "tag_type": t.tag_type, "value": t.value} for t in clip.tags],
+                }
+                results.append(clip_dict)
+            return results
+
     def get_all_clips_with_tags(self):
         """Returns all clips with their associated tags."""
         with self.get_session() as session:

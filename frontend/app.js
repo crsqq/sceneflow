@@ -89,6 +89,7 @@ document.addEventListener('alpine:init', () => {
             this.initWebSocket();
 
             await this.waitForServer();
+            if (this.scanPath) await this.openProject(this.scanPath);
             await this.fetchClips();
             await this.fetchSequences();
             this.status = 'Ready';
@@ -610,10 +611,22 @@ document.addEventListener('alpine:init', () => {
         // Scanning
         // ───────────────────────────────
 
+        async openProject(path) {
+            await fetch('http://localhost:8000/project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path })
+            });
+        },
+
         async chooseFolder() {
             if (window.electronAPI && window.electronAPI.selectFolder) {
                 const folder = await window.electronAPI.selectFolder();
-                if (folder) this.scanPath = folder;
+                if (folder) {
+                    this.scanPath = folder;
+                    await this.openProject(folder);
+                    await this.fetchClips();
+                }
             } else {
                 this.showToast('Folder picker only available in Electron', 'error');
             }
@@ -663,7 +676,9 @@ document.addEventListener('alpine:init', () => {
                 const query = this.queryFilter.trim();
                 const url = query
                     ? `http://localhost:8000/clips?query=${encodeURIComponent(query)}`
-                    : 'http://localhost:8000/clips';
+                    : this.scanPath
+                        ? `http://localhost:8000/clips?directory=${encodeURIComponent(this.scanPath)}`
+                        : 'http://localhost:8000/clips';
                 const response = await fetch(url);
                 const data = await response.json();
                 if (!Array.isArray(data)) return;

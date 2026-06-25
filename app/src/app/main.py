@@ -82,14 +82,24 @@ async def root():
     return {"message": "SceneFlow API is running"}
 
 
+@app.post("/project")
+async def open_project(request: ScanRequest):
+    """Open a project directory (initialise DB) without scanning for new media."""
+    set_project(request.path)
+    return {"status": "ok", "path": request.path}
+
+
 @app.get("/clips")
-async def get_clips(query: str | None = None):
+async def get_clips(query: str | None = None, directory: str | None = None):
     if db_manager is None:
         return []
 
     if query:
         result = db_manager.query_clips(query)
         return result
+
+    if directory:
+        return db_manager.get_clips_for_directory(directory)
 
     return db_manager.get_all_clips_with_tags()
 
