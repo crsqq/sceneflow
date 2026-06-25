@@ -840,6 +840,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     font-size: 0.8rem;
 }
 
+.filename-copy {
+    padding: 6px 8px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-color);
+    font-size: 0.8rem;
+    font-family: monospace;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.filename-copy:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 .metadata-row {
     display: grid;
     grid-template-columns: 1fr 1fr;

@@ -227,6 +227,15 @@
                     <h4>Clip Metadata</h4>
                     <div class="metadata-fields">
                         <label>
+                            <span>File Name</span>
+                            <span
+                                class="filename-copy"
+                                x-text="selectedClip && selectedClip.file_name"
+                                @click="navigator.clipboard.writeText(selectedClip.file_name).then(() => showToast('Filename copied', 'info'))"
+                                title="Click to copy"
+                            ></span>
+                        </label>
+                        <label>
                             <span>Short Name</span>
                             <input type="text" x-model="selectedClip.short_name" placeholder="e.g. Drone opening" @keyup.enter="saveSelectedClipMetadata()">
                         </label>
