@@ -18,11 +18,10 @@ Before running the project, ensure you have the following installed:
 
 ## Quick Start
 
-The easiest way to set up the entire environment is by running the provided setup script:
+Install all dependencies:
 
 ```bash
-chmod +x scripts/setup_env.sh
-./scripts/setup_env.sh
+make build-deps
 ```
 
 ## Manual Setup

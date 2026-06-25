@@ -1,4 +1,8 @@
-.PHONY: lint ruff-check ruff-fix run test
+.PHONY: build-deps lint ruff-check ruff-fix run test
+
+build-deps:
+	cd app && uv sync
+	npm install
 
 lint:
 	cd app && uv run pylint src/app/
