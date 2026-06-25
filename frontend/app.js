@@ -68,6 +68,11 @@ document.addEventListener('alpine:init', () => {
         markdownPreviewOpen: false,
         markdownPreviewContent: '',
 
+        markerPickerOpen: false,
+        markerPickerMarkers: [],
+        markerPickerIndex: 0,
+        markerPickerResolve: null,
+
         toasts: [],
         toastId: 0,
 
@@ -776,16 +781,50 @@ document.addEventListener('alpine:init', () => {
             }
             if (position === null) position = this.activeSequenceItems.length;
             try {
+                // Fetch markers to determine which scene to add
+                const markersResp = await fetch(`http://localhost:8000/clips/${clipId}/markers`);
+                const markers = await markersResp.json();
+
+                let markerId = null;
+                if (markers.length === 1) {
+                    markerId = markers[0].id;
+                } else if (markers.length > 1) {
+                    markerId = await this.openMarkerPicker(markers);
+                    if (markerId === null) return; // user cancelled
+                }
+
                 await fetch(`http://localhost:8000/sequences/${this.activeSequenceId}/items`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ clip_id: clipId, position })
+                    body: JSON.stringify({ clip_id: clipId, position, marker_id: markerId })
                 });
                 await this.loadActiveSequence();
             } catch (error) {
                 console.error('Error adding clip to sequence:', error);
                 this.showToast('Failed to add clip to sequence', 'error');
             }
+        },
+
+        openMarkerPicker(markers) {
+            return new Promise((resolve) => {
+                this.markerPickerMarkers = markers;
+                this.markerPickerIndex = 0;
+                this.markerPickerResolve = resolve;
+                this.markerPickerOpen = true;
+            });
+        },
+
+        markerPickerConfirm() {
+            const marker = this.markerPickerMarkers[this.markerPickerIndex];
+            this.markerPickerOpen = false;
+            if (this.markerPickerResolve) this.markerPickerResolve(marker ? marker.id : null);
+            this.markerPickerResolve = null;
+        },
+
+        markerPickerCancel() {
+            this.markerPickerOpen = false;
+            if (this.markerPickerResolve) this.markerPickerResolve(null);
+            this.markerPickerResolve = null;
         },
 
         async removeBlueprintItem(itemId) {
@@ -904,6 +943,14 @@ document.addEventListener('alpine:init', () => {
         handleGlobalKey(event) {
             // Ignore when typing in inputs/textareas
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+            if (this.markerPickerOpen) {
+                const key = event.key;
+                if (key === 'ArrowDown') { event.preventDefault(); this.markerPickerIndex = Math.min(this.markerPickerIndex + 1, this.markerPickerMarkers.length - 1); }
+                else if (key === 'ArrowUp') { event.preventDefault(); this.markerPickerIndex = Math.max(this.markerPickerIndex - 1, 0); }
+                else if (key === 'Enter') { event.preventDefault(); this.markerPickerConfirm(); }
+                else if (key === 'Escape') { event.preventDefault(); this.markerPickerCancel(); }
+                return;
+            }
             if (this.markerNoteModalOpen || this.sequenceNameModalOpen || this.markdownPreviewOpen || this.shortcutHelpOpen) return;
 
             const key = event.key;

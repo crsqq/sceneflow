@@ -234,6 +234,7 @@ class SequenceItemRequest(BaseModel):
     clip_id: str
     position: int
     notes: str | None = None
+    marker_id: str | None = None
 
 
 @app.post("/sequences")
@@ -248,7 +249,7 @@ async def create_sequence(request: SequenceRequest):
 async def add_sequence_item(sequence_id: str, request: SequenceItemRequest):
     if db_manager is None:
         raise HTTPException(status_code=503, detail="No project opened")
-    item = db_manager.add_sequence_item(sequence_id, request.clip_id, request.position, request.notes)
+    item = db_manager.add_sequence_item(sequence_id, request.clip_id, request.position, request.notes, request.marker_id)
     return item
 
 

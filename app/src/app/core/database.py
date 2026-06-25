@@ -65,6 +65,7 @@ class SequenceItem(Base):
     clip_id = Column(String, ForeignKey("media_clips.id"))
     position = Column(Integer)
     notes = Column(String)
+    marker_id = Column(String, ForeignKey("clip_markers.id"), nullable=True)
 
 
 class DatabaseManager:
@@ -141,7 +142,7 @@ class DatabaseManager:
             return sequence
 
     def add_sequence_item(
-        self, sequence_id: str, clip_id: str, position: int, notes: str | None = None
+        self, sequence_id: str, clip_id: str, position: int, notes: str | None = None, marker_id: str | None = None
     ) -> SequenceItem:
         with self.get_session() as session:
             # Shift existing items at or after the target position to make room
@@ -153,7 +154,7 @@ class DatabaseManager:
             )
             for existing in existing_items:
                 existing.position += 1
-            item = SequenceItem(sequence_id=sequence_id, clip_id=clip_id, position=position, notes=notes)
+            item = SequenceItem(sequence_id=sequence_id, clip_id=clip_id, position=position, notes=notes, marker_id=marker_id)
             session.add(item)
             session.commit()
             session.refresh(item)
@@ -197,6 +198,11 @@ class DatabaseManager:
             results = []
             for item in items:
                 clip = session.query(MediaClip).filter(MediaClip.id == item.clip_id).first()
+                marker = None
+                if item.marker_id:
+                    m = session.query(ClipMarker).filter(ClipMarker.id == item.marker_id).first()
+                    if m:
+                        marker = {"id": m.id, "timestamp": m.timestamp, "end_timestamp": m.end_timestamp, "note": m.note}
                 results.append(
                     {
                         "id": item.id,
@@ -204,6 +210,8 @@ class DatabaseManager:
                         "clip_id": item.clip_id,
                         "position": item.position,
                         "notes": item.notes,
+                        "marker_id": item.marker_id,
+                        "marker": marker,
                         "clip": {
                             "id": clip.id,
                             "file_path": clip.file_path,

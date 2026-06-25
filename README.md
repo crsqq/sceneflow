@@ -8,6 +8,12 @@ SceneFlow handles only this pre-edit phase. Point it at a folder, it scans and b
 
 The source files are never touched. Everything SceneFlow generates — proxies, thumbnails, the database — goes into a `.sceneflow/` folder next to your footage.
 
+## Markers and scenes
+
+The fundamental unit of the blueprint is a **scene**, not a clip. A single clip can contain multiple usable moments — a wide at the start, a close-up reaction at the end, a cutaway in the middle. You mark each one with an in point (and optional out point), and optionally note what the shot is. Each marker defines an independent scene that can be placed anywhere in the story.
+
+When you add a clip to the blueprint you choose which scene (marker) to place. The same clip can appear in the blueprint multiple times, each time at a different story position with a different marker. A clip with no markers is treated as a single full-clip scene.
+
 ## Prerequisites
 
 Before running the project, ensure you have the following installed:

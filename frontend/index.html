@@ -331,6 +331,7 @@
                                 <div class="thumb-placeholder" x-show="!item.clip || !item.clip.thumbnail_path">🎬</div>
                             </div>
                             <div class="bp-name" x-text="item.clip ? (item.clip.short_name || item.clip.file_name) : '[Missing]'"></div>
+                            <div class="bp-marker-badge" x-show="item.marker" x-text="item.marker ? formatTime(item.marker.timestamp) + (item.marker.note ? ' · ' + item.marker.note : '') : ''"></div>
                             <div class="bp-tags" x-show="item.clip && item.clip.tags.length > 0">
                                 <template x-for="tag in item.clip.tags" :key="tag.id">
                                     <span class="tag-pill creative" x-text="tag.value"></span>
@@ -382,6 +383,29 @@
             <pre class="markdown-preview" x-text="markdownPreviewContent"></pre>
             <div class="modal-actions">
                 <button @click="closeMarkdownPreview()" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Marker Picker Modal -->
+    <div class="modal-backdrop" x-show="markerPickerOpen" x-cloak @click="markerPickerCancel()">
+        <div class="modal-card" @click.stop>
+            <h3>Select scene (marker)</h3>
+            <ul class="marker-picker-list">
+                <template x-for="(marker, index) in markerPickerMarkers" :key="marker.id">
+                    <li
+                        :class="{ active: markerPickerIndex === index }"
+                        @click="markerPickerIndex = index; markerPickerConfirm()"
+                        @mouseover="markerPickerIndex = index"
+                    >
+                        <span class="picker-timestamp" x-text="formatTime(marker.timestamp)"></span>
+                        <span class="picker-note" x-show="marker.note" x-text="marker.note"></span>
+                    </li>
+                </template>
+            </ul>
+            <div class="modal-actions">
+                <button @click="markerPickerConfirm()" class="btn-primary">Add</button>
+                <button @click="markerPickerCancel()" class="btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
