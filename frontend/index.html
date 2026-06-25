@@ -320,6 +320,7 @@
                     <template x-for="item in activeSequenceItems" :key="item.id">
                         <li
                             draggable="true"
+                            @click="item.clip && selectClip(item.clip)"
                             @dragstart="dragBlueprintItem($event, item)"
                             @dragover.prevent="dragOverBlueprintItem($event, item)"
                             @drop="dropBlueprintItem($event, item)"
@@ -335,7 +336,7 @@
                                     <span class="tag-pill creative" x-text="tag.value"></span>
                                 </template>
                             </div>
-                            <button @click="removeBlueprintItem(item.id)" class="btn-delete" title="Remove">&times;</button>
+                            <button @click.stop="removeBlueprintItem(item.id)" class="btn-delete" title="Remove">&times;</button>
                         </li>
                     </template>
                 </ul>
