@@ -20,5 +20,12 @@ select = [
     "ICN",  # import conventions
     "FA",   # future annotations
     "FLY",  # flynt (convert to f-string)
+    "G",    # flake8-logging-format (logging f-string interpolation)
+    "BLE",  # flake8-blind-except (broad exception caught)
+    "PIE",  # flake8-pie (unnecessary-pass, redundant expressions, etc.)
+    "N",    # pep8-naming (invalid names, class/function naming conventions)
 ]
 ignore = []
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]  # re-exports are intentional in __init__ files

@@ -13,7 +13,6 @@ from typing import Any
 class QueryNode:
     """Base class for query AST nodes."""
 
-    pass
 
 
 class FieldNode(QueryNode):
