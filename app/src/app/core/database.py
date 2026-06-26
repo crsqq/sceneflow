@@ -154,7 +154,9 @@ class DatabaseManager:
             )
             for existing in existing_items:
                 existing.position += 1
-            item = SequenceItem(sequence_id=sequence_id, clip_id=clip_id, position=position, notes=notes, marker_id=marker_id)
+            item = SequenceItem(
+                sequence_id=sequence_id, clip_id=clip_id, position=position, notes=notes, marker_id=marker_id
+            )
             session.add(item)
             session.commit()
             session.refresh(item)
@@ -202,7 +204,12 @@ class DatabaseManager:
                 if item.marker_id:
                     m = session.query(ClipMarker).filter(ClipMarker.id == item.marker_id).first()
                     if m:
-                        marker = {"id": m.id, "timestamp": m.timestamp, "end_timestamp": m.end_timestamp, "note": m.note}
+                        marker = {
+                            "id": m.id,
+                            "timestamp": m.timestamp,
+                            "end_timestamp": m.end_timestamp,
+                            "note": m.note,
+                        }
                 results.append(
                     {
                         "id": item.id,

@@ -249,7 +249,9 @@ async def create_sequence(request: SequenceRequest):
 async def add_sequence_item(sequence_id: str, request: SequenceItemRequest):
     if db_manager is None:
         raise HTTPException(status_code=503, detail="No project opened")
-    item = db_manager.add_sequence_item(sequence_id, request.clip_id, request.position, request.notes, request.marker_id)
+    item = db_manager.add_sequence_item(
+        sequence_id, request.clip_id, request.position, request.notes, request.marker_id
+    )
     return item
 
 
