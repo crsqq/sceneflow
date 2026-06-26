@@ -10,8 +10,8 @@ class StoryboardExporter:
     def export_markdown_storyboard(self, sequence_id: str) -> str:
         """Generates a Markdown table summarizing the storyboarded sequence.
 
-        Each marker produces its own row. Clips without markers appear once as a
-        'full clip' row.
+        Each sequence item produces one row. If a marker was selected for the item,
+        its section is shown; otherwise the row lists 'full clip'.
         """
         with self.db_manager.get_session() as session:
             from app.core.database import ClipMarker, MediaClip, Sequence, SequenceItem
@@ -49,28 +49,19 @@ class StoryboardExporter:
                     md += f"| {item.position} | [Missing Clip] | | - | - | - | - |\n"
                     continue
 
-                markers = (
-                    session.query(ClipMarker).filter(ClipMarker.clip_id == clip.id).order_by(ClipMarker.timestamp).all()
-                )
-
                 short_name = clip.short_name or ""
-                if markers:
-                    for marker in markers:
-                        section = _format_section(marker.timestamp, marker.end_timestamp)
-                        note = marker.note or item.notes or ""
-                        md += (
-                            f"| {item.position} | {clip.file_name} | {short_name} "
-                            f"| {clip.orientation or '-'} | {clip.resolution or '-'} "
-                            f"| {section} | {note} |\n"
-                        )
+                if item.marker_id:
+                    marker = session.query(ClipMarker).filter(ClipMarker.id == item.marker_id).first()
+                    section = _format_section(marker.timestamp, marker.end_timestamp) if marker else "full clip"
+                    note = (marker.note if marker else None) or item.notes or ""
                 else:
                     section = "full clip"
                     note = item.notes or ""
-                    md += (
-                        f"| {item.position} | {clip.file_name} | {short_name} "
-                        f"| {clip.orientation or '-'} | {clip.resolution or '-'} "
-                        f"| {section} | {note} |\n"
-                    )
+                md += (
+                    f"| {item.position} | {clip.file_name} | {short_name} "
+                    f"| {clip.orientation or '-'} | {clip.resolution or '-'} "
+                    f"| {section} | {note} |\n"
+                )
 
             return md
 
